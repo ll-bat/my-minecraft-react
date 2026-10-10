@@ -1,29 +1,54 @@
 import {Canvas} from "@react-three/fiber";
-import {Sky} from "@react-three/drei";
 import {Physics} from "@react-three/cannon";
-import {Ground} from "./components/Ground";
 import {Player} from "./components/Player";
 import {FPV} from "./components/FPV";
-import {Cubes} from "./components/Cubes";
 import {Menu} from "./components/Menu"
 import {TextureSelector} from "./components/TextureSelector";
+import {ChunkWorld} from "./components/ChunkWorld";
+import {WorldEnvironment} from "./components/WorldEnvironment";
+import {FluidSimulation} from "./components/FluidSimulation";
+import {Inventory} from "./components/Inventory";
+import {ItemDrops} from "./components/ItemDrops";
+import {FurnaceSimulation} from "./components/FurnaceSimulation";
+import {CreatureFeedback, Creatures} from "./components/Creatures";
+import {CreatureSimulation} from "./components/CreatureSimulation";
+import {BlockSimulation} from "./components/BlockSimulation";
+import {BlockParticles, FurnaceSmoke, GameAudio, HeldItem, InteractionFeedback, WorldLights} from "./components/WorldFeedback";
+import {AdvancedShortcuts, DataPackManager, DebugOverlay, MapPanel, WorldManager} from "./components/AdvancedUI";
 
 function App() {
     return (
         <>
-            <Canvas>
-                <Sky sunPosition={[100, 100, 200]}/>
-                <ambientLight intensity={.4}/>
+            <Canvas onContextMenu={(event) => event.preventDefault()}>
+                <WorldEnvironment/>
+                <WorldLights/>
                 <FPV/>
                 <Physics>
-                    <Cubes/>
+                    <ChunkWorld/>
+                    <ItemDrops/>
+                    <Creatures/>
                     <Player/>
-                    <Ground/>
                 </Physics>
+                <BlockParticles/>
+                <FurnaceSmoke/>
+                <HeldItem/>
             </Canvas>
             <TextureSelector/>
+            <FluidSimulation/>
+            <FurnaceSimulation/>
+            <CreatureSimulation/>
+            <BlockSimulation/>
+            <GameAudio/>
             <div className='absolute centered cursor'/>
-            {/*<Menu />*/}
+            <Menu/>
+            <Inventory/>
+            <CreatureFeedback/>
+            <InteractionFeedback/>
+            <AdvancedShortcuts/>
+            <DebugOverlay/>
+            <MapPanel/>
+            <WorldManager/>
+            <DataPackManager/>
         </>
     )
 }

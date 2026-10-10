@@ -1,59 +1,54 @@
-import {useEffect, useState} from "react";
+import {useEffect} from "react";
 import {useStore} from "../hooks/useStore";
-import {useKeyboard} from "../hooks/useKeyboard";
-import {dirtImg, grassImg, glassImg, logImg, woodImg} from "../images/images.js"
-
-const imagesMap = {
-    dirt: dirtImg,
-    grass: grassImg,
-    glass: glassImg,
-    log: logImg,
-    wood: woodImg
-}
+import {HOTBAR_SIZE} from "../world/inventory";
+import {ItemIcon} from "./ItemIcon";
 
 export const TextureSelector = () => {
-    const [visible, setVisible] = useState(false)
-    const [activeTexture, setTexture] = useStore((state) => [state.texture, state.setTexture])
-
-    const boxes = useKeyboard()
+    const inventory = useStore((state) => state.inventory);
+    const selectedHotbar = useStore((state) => state.selectedHotbar);
+    const inventoryOpen = useStore((state) => state.inventoryOpen);
+    const selectHotbar = useStore((state) => state.selectHotbar);
 
     useEffect(() => {
-        for (const textureType in boxes) {
-            if (boxes[textureType]) {
-                console.log(textureType)
-                setTexture(textureType)
+        const selectByNumber = (event) => {
+            const slot = Number(event.key) - 1;
+            if (!inventoryOpen && slot >= 0 && slot < HOTBAR_SIZE) {
+                selectHotbar(slot);
             }
-        }
-    }, [boxes.dirt, boxes.grass, boxes.glass, boxes.wood, boxes.log])
+        };
 
-    useEffect(() => {
-        const visibilityTimeout = setTimeout(() => {
-            setVisible(false)
-        }, 250)
-        setVisible(true)
+        const selectByWheel = (event) => {
+            event.preventDefault();
+            if (inventoryOpen) return;
+            const direction = event.deltaY > 0 ? 1 : -1;
+            const nextIndex = (selectedHotbar + direction + HOTBAR_SIZE) % HOTBAR_SIZE;
+            selectHotbar(nextIndex);
+        };
+
+        document.addEventListener("keydown", selectByNumber);
+        document.addEventListener("wheel", selectByWheel, {passive: false});
         return () => {
-            clearTimeout(visibilityTimeout)
-        }
-    }, [activeTexture])
+            document.removeEventListener("keydown", selectByNumber);
+            document.removeEventListener("wheel", selectByWheel);
+        };
+    }, [inventoryOpen, selectHotbar, selectedHotbar]);
 
     return (
-        <>
-            {visible && (
-                <div className='absolute centered'>
-                    {Object.entries(imagesMap).map(([k, src]) => {
-                      return (
-                          <img
-                              key={k}
-                              src={src}
-                              alt={k}
-                              width='100px'
-                              height='100px'
-                              className={`${activeTexture === k ? 'active-texture' : 'non-active-texture'}`}
-                              />
-                      )
-                    })}
-                </div>
-            )}
-        </>
-    )
-}
+        <div className="hotbar" aria-label="Block selection" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
+            {inventory.slice(0, HOTBAR_SIZE).map((stack, index) => (
+                <button
+                    type="button"
+                    key={index}
+                    className={`hotbar-slot ${selectedHotbar === index ? "active" : ""}`}
+                    onClick={() => selectHotbar(index)}
+                    title={`${index + 1}: ${stack?.itemId ?? "Empty"}`}
+                    aria-label={`Select hotbar slot ${index + 1}`}
+                    aria-pressed={selectedHotbar === index}
+                >
+                    <span className="hotbar-key">{index + 1}</span>
+                    {stack && <ItemIcon {...stack}/>}
+                </button>
+            ))}
+        </div>
+    );
+};

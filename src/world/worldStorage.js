@@ -10,7 +10,7 @@ import {ACTIVE_WORLD_KEY, ensureWorldCatalog, readCatalog, upsertWorld, worldDoc
 
 export const WORLD_STORAGE_KEY = "minecraft-react-world";
 export const LEGACY_STORAGE_KEY = "cubes";
-export const WORLD_VERSION = 7;
+export const WORLD_VERSION = 8;
 export const DEFAULT_WORLD_SEED = "minecraft-react";
 
 function validPosition(value) {
@@ -134,7 +134,10 @@ export function parseWorldDocument(serialized, legacySerialized = null) {
         }
 
         const document = JSON.parse(serialized);
-        if (![2, 3, 4, 5, 6, WORLD_VERSION].includes(document.version) || !Array.isArray(document.chunks)) {
+        if (!Number.isInteger(document.version)
+            || document.version < 2
+            || document.version > WORLD_VERSION
+            || !Array.isArray(document.chunks)) {
             return null;
         }
 
@@ -182,9 +185,9 @@ export function parseWorldDocument(serialized, legacySerialized = null) {
                 ? document.selectedHotbar
                 : 0,
             gameMode: migrated || document.gameMode === "creative" ? "creative" : "survival",
-            renderDistance: Number.isInteger(document.renderDistance)
+            renderDistance: document.version >= 8 && Number.isInteger(document.renderDistance)
                 ? Math.max(1, Math.min(4, document.renderDistance))
-                : 2,
+                : 4,
             drops: migrated || !Array.isArray(document.drops) ? [] : document.drops.filter((drop) => (
                 drop
                 && typeof drop.id === "string"
@@ -207,6 +210,7 @@ export function parseWorldDocument(serialized, legacySerialized = null) {
                     ? document.blockStates.filter(([key, value]) => validKey(key, 3) && value && typeof value === "object")
                         .map(([key, value]) => [key, {
                             facing: ["north", "south", "east", "west"].includes(value.facing) ? value.facing : "north",
+                            half: value.half === "upper" ? "upper" : "lower",
                             open: Boolean(value.open),
                             powered: Boolean(value.powered),
                         }])
@@ -267,7 +271,7 @@ export function serializeWorld(state) {
         survivalInventory: state.survivalInventory,
         selectedHotbar: state.selectedHotbar,
         gameMode: state.gameMode,
-        renderDistance: state.renderDistance ?? 2,
+        renderDistance: state.renderDistance ?? 4,
         drops: state.drops,
         playerCrafting: state.playerCrafting,
         tableCrafting: state.tableCrafting,

@@ -28,6 +28,7 @@ export const DebugOverlay = () => {
     const levels = useStore((state) => state.blockLight);
     const active = useStore((state) => state.activeChunkKeys);
     const time = useStore((state) => state.worldTime);
+    const metrics = useStore((state) => state.renderMetrics);
     if (!open) return null;
     const rounded = position.map(Math.round);
     return <aside className="debug-overlay">
@@ -38,6 +39,18 @@ export const DebugOverlay = () => {
         <span>Light: {lightAt(chunks, levels, rounded)}</span>
         <span>World time: {Math.floor(time)}s</span>
         <span>Active chunks: {active.length}</span>
+        {metrics && <>
+            <span>Frame: {metrics.frameMs.toFixed(1)} ms (p95 {metrics.frameP95Ms.toFixed(1)})</span>
+            <span>Draw calls: {metrics.drawCalls} · Triangles: {metrics.triangles.toLocaleString()}</span>
+            <span>GPU: {metrics.geometries} geometries · {metrics.textures} textures · ~{metrics.gpuMb.toFixed(1)} MB buffers</span>
+            <span>Mesh p95: worker {metrics.workerMeshMs.toFixed(1)} ms · install {metrics.meshInstallMs.toFixed(1)} ms</span>
+            <span>Layers: O {metrics.layers.opaque.toLocaleString()} · C {metrics.layers.cutout.toLocaleString()} · T {metrics.layers.translucent.toLocaleString()} · E {metrics.layers.emissive.toLocaleString()}</span>
+            <span>Objects: furniture {metrics.objects.furniture.toLocaleString()} · decor {metrics.objects.decor.toLocaleString()} · outdoor {metrics.objects.outdoor.toLocaleString()}</span>
+            <span>Budget D{metrics.budgetDistance}: {Object.values(metrics.withinBudget).every(Boolean) ? "within target" : `over ${Object.entries(metrics.withinBudget).filter(([, passing]) => !passing).map(([name]) => name).join(", ")}`}</span>
+            {[2, 4].map((distance) => metrics.distanceProfiles[distance] && <span key={distance}>
+                D{distance}: {metrics.distanceProfiles[distance].frameMs.toFixed(1)} ms · {metrics.distanceProfiles[distance].drawCalls} calls · {metrics.distanceProfiles[distance].triangles.toLocaleString()} tris
+            </span>)}
+        </>}
     </aside>;
 };
 

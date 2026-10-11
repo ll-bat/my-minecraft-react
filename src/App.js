@@ -15,11 +15,13 @@ import {CreatureSimulation} from "./components/CreatureSimulation";
 import {BlockSimulation} from "./components/BlockSimulation";
 import {BlockParticles, FurnaceSmoke, GameAudio, HeldItem, InteractionFeedback, WorldLights} from "./components/WorldFeedback";
 import {AdvancedShortcuts, DataPackManager, DebugOverlay, MapPanel, WorldManager} from "./components/AdvancedUI";
+import {RenderingDiagnostics} from "./components/RenderingDiagnostics";
 
 function App() {
     return (
         <>
             <Canvas onContextMenu={(event) => event.preventDefault()}>
+                <RenderingDiagnostics/>
                 <WorldEnvironment/>
                 <WorldLights/>
                 <FPV/>

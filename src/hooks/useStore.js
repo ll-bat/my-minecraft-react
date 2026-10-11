@@ -54,7 +54,7 @@ import {generateTerrainColumnAsync} from "../world/terrainStreaming";
 
 export {WORLD_STORAGE_KEY};
 
-export const RENDER_DISTANCE = 2;
+export const RENDER_DISTANCE = 4;
 const TERRAIN_LIGHT_DEFINITIONS = Object.fromEntries(Object.values(BLOCK_BY_ID).map((block) => [
     block.id,
     {
@@ -181,6 +181,7 @@ function initialState() {
         spawn: spawnPosition(seed),
         worldId: 1,
         saveStatus: "",
+        renderMetrics: null,
     };
 }
 
@@ -343,7 +344,7 @@ export const useStore = create((set, get) => ({
         });
     },
 
-    addCube: (x, y, z, facing = "north") => {
+    addCube: (x, y, z, facing = "north", placementState = {}) => {
         const position = [Math.round(x), Math.round(y), Math.round(z)];
         const state = get();
         const stack = state.inventory[state.selectedHotbar];
@@ -371,8 +372,15 @@ export const useStore = create((set, get) => ({
             if (item.blockId === "chest") {
                 blockEntities.set(positionKey(position), createChest());
             }
-            if (BLOCK_BY_ID[item.blockId]?.oriented) {
-                blockStates.set(positionKey(position), {facing, open: false, powered: false});
+            const definition = BLOCK_BY_ID[item.blockId];
+            const usesHalf = definition?.shape === "slab" || definition?.shape === "stairs";
+            if (definition?.oriented || usesHalf) {
+                blockStates.set(positionKey(position), {
+                    facing,
+                    open: false,
+                    powered: false,
+                    ...(usesHalf ? {half: placementState.half === "upper" ? "upper" : "lower"} : {}),
+                });
             }
             if (placingDoor) {
                 chunks = setBlock(chunks, upperPosition, "door_top");

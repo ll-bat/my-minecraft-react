@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "models": [
+    "barrel",
+    "basket",
+    "bench",
+    "bush",
+    "cabinet",
+    "chair",
+    "crate",
+    "fallen_log",
+    "floor_lamp",
+    "flowerpot",
+    "hanging_lantern",
+    "path_marker",
+    "planter",
+    "rock",
+    "rug",
+    "shelf",
+    "sign",
+    "stool",
+    "wall_art",
+    "wood_table"
+  ]
+}

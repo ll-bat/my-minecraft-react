@@ -47,6 +47,18 @@ describe("world store", () => {
         expect(getBlock(useStore.getState().chunks, [1, 3, -4])).toBe("dirt");
     });
 
+    test("stores slab half and stair facing during placement", () => {
+        const inventory = emptyInventory();
+        inventory[0] = {itemId: "wood_slab", count: 64};
+        inventory[1] = {itemId: "stone_stairs", count: 64};
+        useStore.setState({inventory, survivalInventory: inventory, selectedHotbar: 0});
+        expect(useStore.getState().addCube(0, 1, 0, "north", {half: "upper"})).toBe(true);
+        useStore.getState().selectHotbar(1);
+        expect(useStore.getState().addCube(1, 1, 0, "east", {half: "lower"})).toBe(true);
+        expect(useStore.getState().blockStates.get("0,1,0").half).toBe("upper");
+        expect(useStore.getState().blockStates.get("1,1,0")).toMatchObject({facing: "east", half: "lower"});
+    });
+
     test("removes only the cube at the requested position", () => {
         useStore.getState().addCube(1, 2, 3);
         useStore.getState().addCube(4, 5, 6);
@@ -62,7 +74,7 @@ describe("world store", () => {
         useStore.getState().saveWorld();
 
         const saved = JSON.parse(window.localStorage.getItem(WORLD_STORAGE_KEY));
-        expect(saved.version).toBe(7);
+        expect(saved.version).toBe(8);
         expect(saved.chunks).toHaveLength(1);
     });
 
@@ -83,10 +95,10 @@ describe("world store", () => {
     });
 
     test("uses a two-chunk render distance", () => {
-        expect(RENDER_DISTANCE).toBe(2);
-        expect(renderColumnOffsets(RENDER_DISTANCE)).toHaveLength(25);
-        expect(renderColumnOffsets(RENDER_DISTANCE)).toContainEqual([2, 2]);
-        expect(renderColumnOffsets(RENDER_DISTANCE)).not.toContainEqual([3, 0]);
+        expect(RENDER_DISTANCE).toBe(4);
+        expect(renderColumnOffsets(RENDER_DISTANCE)).toHaveLength(81);
+        expect(renderColumnOffsets(RENDER_DISTANCE)).toContainEqual([4, 4]);
+        expect(renderColumnOffsets(RENDER_DISTANCE)).not.toContainEqual([5, 0]);
     });
 
     test("accepts render distances one through four", () => {

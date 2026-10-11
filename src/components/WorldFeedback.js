@@ -4,8 +4,10 @@ import {Euler, Vector3} from "three";
 import {useStore} from "../hooks/useStore";
 import {BLOCK_BY_ID} from "../world/blocks";
 import {emittedLight, lightSources} from "../world/lighting";
+import {BlockItemMesh, ItemArtworkMesh} from "./BlockItemMesh";
 import {ITEM_BY_ID} from "../world/items";
 import {getBlock} from "../world/chunks";
+import {ModelItemMesh} from "./ModelObjects";
 
 const SOUND_FREQUENCIES = {place: 190, break: 120, step: 90, water: 150, open: 260, toggle: 220, switch: 320, rest: 410, till: 140, plant: 280, harvest: 360, creature: 460, pickup: 520, ambient: 70};
 
@@ -123,8 +125,17 @@ export const HeldItem = () => {
         ref.current.rotation.copy(new Euler(camera.rotation.x - 0.25, camera.rotation.y - 0.35, camera.rotation.z + 0.2));
     });
     if (!item) return null;
-    return <mesh ref={ref} scale={0.22} raycast={() => null}>
-        <boxGeometry/>
-        <meshStandardMaterial map={block?.texture} color={block ? "white" : item.uiColor ?? "#cccccc"}/>
-    </mesh>;
+    if (block?.modelUrl) {
+        return <ModelItemMesh ref={ref} block={block} scale={0.32} raycast={() => null}/>;
+    }
+    if (!block && item.artwork) {
+        return <ItemArtworkMesh ref={ref} artwork={item.artwork} scale={0.3} raycast={() => null}/>;
+    }
+    return <BlockItemMesh
+        ref={ref}
+        block={block}
+        color={item.uiColor ?? "#cccccc"}
+        scale={0.22}
+        raycast={() => null}
+    />;
 };

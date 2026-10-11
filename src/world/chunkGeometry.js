@@ -8,7 +8,8 @@ export function buildChunkMeshData(
     key,
     selectedChunk = chunks.get(key),
     cacheRevision = 0,
-    blockStates = new Map()
+    blockStates = new Map(),
+    worldSeed = "minecraft-react"
 ) {
     return buildChunkMeshDataCore(
         chunks,
@@ -16,6 +17,7 @@ export function buildChunkMeshData(
         selectedChunk,
         cacheRevision,
         blockStates,
-        BLOCK_BY_ID
+        BLOCK_BY_ID,
+        worldSeed
     );
 }

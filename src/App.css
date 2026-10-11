@@ -81,31 +81,129 @@
     width: 92%;
 }
 
+.atlas-item-preview {
+    display: block;
+    height: 100%;
+    overflow: hidden;
+    position: relative;
+    width: 100%;
+}
+
+.atlas-item-preview img {
+    display: block;
+    image-rendering: pixelated;
+    max-width: none;
+    object-fit: fill;
+    position: absolute;
+}
+
+.item-cube-preview {
+    display: block;
+    height: 100%;
+    position: relative;
+    width: 100%;
+}
+
+.item-cube-face {
+    filter: drop-shadow(0 2px 1px rgb(0 0 0 / 22%));
+    overflow: hidden;
+    position: absolute;
+}
+
+.item-cube-top {
+    clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+    height: 40%;
+    left: 16%;
+    top: 7%;
+    width: 68%;
+}
+
+.item-cube-front {
+    clip-path: polygon(0 0, 100% 22%, 100% 100%, 0 78%);
+    height: 56%;
+    left: 16%;
+    top: 27%;
+    width: 34%;
+}
+
+.item-cube-side {
+    clip-path: polygon(0 22%, 100% 0, 100% 78%, 0 100%);
+    filter: brightness(0.78) drop-shadow(0 2px 1px rgb(0 0 0 / 22%));
+    height: 56%;
+    left: 50%;
+    top: 27%;
+    width: 34%;
+}
+
 .item-door-preview {
     flex-direction: column;
     padding: 2%;
 }
 
-.item-door-preview canvas {
+.item-door-preview > .atlas-item-preview {
     height: 46%;
     width: 46%;
 }
 
 .item-bed-preview canvas,
+.item-bed-preview > .atlas-item-preview,
 .item-farmland-preview canvas,
-.item-trapdoor-preview canvas {
+.item-farmland-preview > .atlas-item-preview,
+.item-trapdoor-preview canvas,
+.item-trapdoor-preview > .atlas-item-preview {
     height: 58%;
     width: 94%;
 }
 
 .item-cross-preview canvas,
-.item-ladder-preview canvas {
+.item-ladder-preview canvas,
+.item-ladder-preview > .atlas-item-preview {
     height: 92%;
     width: 72%;
 }
 
+.item-compound-preview {
+    display: block;
+    height: 90%;
+    position: relative;
+    width: 90%;
+}
+
+.item-shape-part {
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 12%), 1px 2px 2px rgb(0 0 0 / 28%);
+    overflow: hidden;
+    position: absolute;
+}
+
+.item-slab-preview .slab { height: 32%; left: 8%; top: 50%; width: 84%; }
+.item-stairs-preview .stairs-base { height: 30%; left: 7%; top: 54%; width: 86%; }
+.item-stairs-preview .stairs-step { height: 31%; left: 48%; top: 25%; width: 45%; }
+.item-fence-preview .fence-post { height: 82%; left: 40%; top: 8%; width: 20%; }
+.item-fence-preview .fence-rail-top { height: 13%; left: 7%; top: 30%; width: 86%; }
+.item-fence-preview .fence-rail-bottom { height: 13%; left: 7%; top: 58%; width: 86%; }
+.item-wall-preview .wall-post { height: 82%; left: 35%; top: 8%; width: 30%; }
+.item-wall-preview .wall-arm { height: 31%; left: 7%; top: 43%; width: 86%; }
+.item-post-preview .post { height: 84%; left: 36%; top: 7%; width: 28%; }
+.item-beam-preview .beam { height: 28%; left: 6%; top: 37%; width: 88%; }
+.item-railing-preview .railing-post { height: 80%; left: 43%; top: 10%; width: 14%; }
+.item-railing-preview .railing-top { height: 10%; left: 6%; top: 30%; width: 88%; }
+.item-railing-preview .railing-bottom { height: 10%; left: 6%; top: 60%; width: 88%; }
+.item-torch-preview .torch-stick { height: 72%; left: 44%; top: 22%; transform: rotate(12deg); width: 12%; }
+.item-torch-preview .torch-flame { border-radius: 45% 45% 50% 50%; height: 28%; left: 36%; top: 4%; width: 28%; }
+.item-lantern-preview .lantern-base { height: 12%; left: 27%; top: 76%; width: 46%; }
+.item-lantern-preview .lantern-body { height: 48%; left: 31%; top: 30%; width: 38%; }
+.item-lantern-preview .lantern-top { height: 11%; left: 26%; top: 23%; width: 48%; }
+.item-lantern-preview .lantern-handle { border: 5px solid #8d6938; border-bottom: 0; height: 20%; left: 37%; top: 5%; width: 26%; }
+
 .item-swatch {
     box-shadow: inset 0 0 0 2px rgb(255 255 255 / 16%);
+}
+
+.item-artwork {
+    display: block;
+    height: 100%;
+    padding: 5%;
+    width: 100%;
 }
 
 .item-count {
@@ -259,6 +357,23 @@
     border: 2px solid #ddd;
     cursor: pointer;
     padding: 4px;
+    position: relative;
+}
+
+.catalog-item-label {
+    background: rgb(20 20 20 / 82%);
+    bottom: 1px;
+    color: white;
+    font: 9px/1.15 sans-serif;
+    left: 1px;
+    overflow: hidden;
+    padding: 2px;
+    pointer-events: none;
+    position: absolute;
+    right: 1px;
+    text-overflow: ellipsis;
+    text-shadow: 1px 1px #111;
+    white-space: nowrap;
 }
 
 .trash-slot {

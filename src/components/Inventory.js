@@ -130,7 +130,10 @@ export const Inventory = () => {
                     <aside className="catalog-sidebar" aria-label="Item catalog">
                         <nav>{ITEM_CATEGORY_ORDER.map((id) => <button type="button" className={category === id ? "active" : ""} key={id} onClick={() => setCategory(id)}>{ITEM_CATEGORY_NAMES[id]}</button>)}</nav>
                         <div className="catalog-items">
-                            {itemsInCategory(category).map((item) => <button type="button" key={item.id} title={`Add ${item.name}`} onClick={() => addCatalogItem(item.id)}><ItemIcon itemId={item.id} count={item.maxStack}/></button>)}
+                            {itemsInCategory(category).map((item) => <button type="button" className="catalog-item" key={item.id} title={`Add ${item.name}`} onClick={() => addCatalogItem(item.id)}>
+                                <ItemIcon itemId={item.id} count={item.maxStack}/>
+                                <span className="catalog-item-label">{item.name}</span>
+                            </button>)}
                         </div>
                         <button
                             type="button"

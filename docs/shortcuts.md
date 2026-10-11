@@ -17,7 +17,7 @@
 | **Click the game world** | Activate pointer lock and capture mouse movement. |
 | **Escape** | Release pointer lock so the menu and hotbar can be clicked. |
 | **E** | Open or close the inventory. Opening it releases pointer lock. |
-| **F3** | Toggle the debug overlay with coordinates, chunk, biome, dimension, light, time, and active chunks. |
+| **F3** | Toggle coordinates, lighting, live frame/draw/triangle/memory measurements, mesh timings, and distance 2/4 performance profiles. |
 | **M** | Open or close the explored-chunk map, compass markers, discoveries, and peaceful goals. |
 
 ## Block interaction
@@ -29,6 +29,10 @@
 | **Right mouse button — hold** | Break the targeted block. Matching tools break blocks faster and lose durability in survival. Bedrock cannot be broken. |
 | **Place Wooden Door** | Places one coordinated structure two blocks high. Both halves open, close, and break together. Placement requires two empty vertical spaces. |
 | **Place Framed Window** | Places a one-block window with a solid wooden border and transparent central pane. |
+| **Place a slab or stair** | Clicking the upper half of a side or the underside of a block places an upper shape; other faces place a lower shape. Stairs face the camera direction. |
+| **Place a fence, wall, or railing** | Connects automatically to compatible neighboring solid blocks, including connections across chunk boundaries. |
+| **Place a beam** | Places the beam horizontally according to the camera direction. Posts remain vertical. |
+| **Place furniture or decorations** | Places the selected low-poly object in one voxel. Directional furniture faces the camera direction; rugs, rocks, plants, lamps, and wall decorations retain their specialized shape. |
 | **Left mouse button with a hoe** | Till the top of a dirt or grass block into farmland. |
 | **Left mouse button with seeds** | Plant a crop on top of farmland. Crops grow when water is within four blocks. |
 | **Right mouse button on a mature crop** | Harvest wheat and seeds, then replant the crop automatically. |
@@ -51,7 +55,7 @@ Creatures never cause damage and cannot be attacked. Befriended creatures follow
 | **Right-click an inventory slot** | Take half a stack or place one held item. |
 | **Shift-click an inventory slot** | Move the stack between the hotbar and main inventory. |
 | **Drag an inventory stack** | Move or merge the stack into the destination slot. |
-| **Click an item in the category catalog** | Add a full stack of that item to an available inventory slot. Categories include Blocks, Windows, Doors, Utility, Nature, Materials, Tools, and Creatures. |
+| **Click an item in the category catalog** | Add a full stack of that item to an available inventory slot. Categories include Blocks, Windows, Doors, Utility, Nature, Fluids, Furniture, Decor, Outdoor, Materials, Tools, and Creatures. Water and Lava are in Fluids. |
 | **Carry or drag a stack to Trash** | Permanently remove that stack from the inventory. It can be added again later from the category catalog. |
 | **Left-click with a creature item selected** | Place a persistent friendly sheep, rabbit, or glow sprite on top of the targeted block. |
 | **Click a crafting output** | Craft the matched recipe into inventory and consume one set of ingredients. |
@@ -70,7 +74,7 @@ These controls appear in the menu at the top of the game.
 | **Save** | Save terrain changes, inventory and crafting grids, tool durability, furnace and chest contents, block orientation and power, crop updates, world time, selected hotbar slot, and player position. |
 | **Regenerate** | Recreate the current seed's original terrain after confirmation, discarding unsaved block changes. |
 | **Mode** | Switch between survival inventory rules and the creative item catalog. |
-| **View** | Change the streamed render distance from 1 (Low) through 4 (Ultra). Distance 2 is the default. |
+| **View** | Change the streamed render distance from 1 (Low) through 4 (Ultra). Distance 4 is the default. |
 | **Worlds** | Create, open, duplicate, export, import, or delete isolated worlds and configure current world rules. |
 | **Map** | Open the explored map, marker list, compass readout, biome discoveries, structures, and goals. |
 | **Packs** | Validate and enable a version-1 JSON data pack with namespaced blocks and recipes. |

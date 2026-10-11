@@ -23,7 +23,7 @@ describe("world storage", () => {
             playerCrafting: [{itemId: "wood", count: 1}, null, null, null],
             tableCrafting: Array(9).fill(null),
             blockEntities: new Map([["2,3,4", {...createFurnace(50), input: {itemId: "sand", count: 1}}]]),
-            blockStates: new Map([["4,5,6", {facing: "west", open: false, powered: true}]]),
+            blockStates: new Map([["4,5,6", {facing: "west", half: "upper", open: false, powered: true}]]),
             scheduledUpdates: [scheduleCrop([5, 6, 7], 1000)],
             worldTime: 180,
             entities: [{
@@ -45,6 +45,7 @@ describe("world storage", () => {
         expect(parsed.playerCrafting[0].itemId).toBe("wood");
         expect(parsed.blockEntities.get("2,3,4").input.itemId).toBe("sand");
         expect(parsed.blockStates.get("4,5,6").facing).toBe("west");
+        expect(parsed.blockStates.get("4,5,6").half).toBe("upper");
         expect(parsed.scheduledUpdates[0].position).toEqual([5, 6, 7]);
         expect(parsed.worldTime).toBe(180);
         expect(parsed.entities[0].friendLevel).toBe(2);
@@ -92,5 +93,25 @@ describe("world storage", () => {
         }));
         expect(parsed.gameMode).toBe("creative");
         expect(parsed.inventory[0]).toEqual({itemId: "dirt", count: 64});
+    });
+
+    test("migrates the previous saved view distance to the new Ultra default", () => {
+        const migrated = parseWorldDocument(JSON.stringify({
+            version: 7,
+            seed: "previous-default",
+            texture: "dirt",
+            renderDistance: 2,
+            chunks: [],
+        }));
+        const current = parseWorldDocument(JSON.stringify({
+            version: 8,
+            seed: "current-choice",
+            texture: "dirt",
+            renderDistance: 2,
+            chunks: [],
+        }));
+
+        expect(migrated.renderDistance).toBe(4);
+        expect(current.renderDistance).toBe(2);
     });
 });

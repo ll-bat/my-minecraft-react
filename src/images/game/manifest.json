@@ -1,0 +1,928 @@
+{
+  "entries": [
+    {
+      "id": "bedrock",
+      "modification": "bedrock",
+      "output": "src/images/game/blocks/bedrock.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/greystone.png"
+    },
+    {
+      "id": "brick_gray",
+      "modification": "copied",
+      "output": "src/images/game/blocks/brick_gray.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/brick_grey.png"
+    },
+    {
+      "id": "brick_red",
+      "modification": "copied",
+      "output": "src/images/game/blocks/brick_red.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/brick_red.png"
+    },
+    {
+      "id": "cactus_bottom",
+      "modification": "copied",
+      "output": "src/images/game/blocks/cactus_bottom.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/cactus_inside.png"
+    },
+    {
+      "id": "cactus_side",
+      "modification": "copied",
+      "output": "src/images/game/blocks/cactus_side.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/cactus_side.png"
+    },
+    {
+      "id": "cactus_top",
+      "modification": "copied",
+      "output": "src/images/game/blocks/cactus_top.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/cactus_top.png"
+    },
+    {
+      "id": "coal_ore",
+      "modification": "copied",
+      "output": "src/images/game/blocks/coal_ore.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/stone_coal.png"
+    },
+    {
+      "id": "coal_ore_variant",
+      "modification": "variant_cool",
+      "output": "src/images/game/blocks/coal_ore_variant.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/stone_coal.png"
+    },
+    {
+      "id": "copper_ore",
+      "modification": "copied",
+      "output": "src/images/game/blocks/copper_ore.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/stone_browniron.png"
+    },
+    {
+      "id": "copper_ore_variant",
+      "modification": "variant_warm",
+      "output": "src/images/game/blocks/copper_ore_variant.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/stone_browniron.png"
+    },
+    {
+      "id": "crystal_block",
+      "modification": "crystal",
+      "output": "src/images/game/blocks/crystal_block.png",
+      "renderLayer": "emissive",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/ice.png"
+    },
+    {
+      "id": "crystal_ore",
+      "modification": "crystal",
+      "output": "src/images/game/blocks/crystal_ore.png",
+      "renderLayer": "emissive",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/stone_diamond.png"
+    },
+    {
+      "id": "crystal_ore_variant",
+      "modification": "crystal_variant",
+      "output": "src/images/game/blocks/crystal_ore_variant.png",
+      "renderLayer": "emissive",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/stone_diamond.png"
+    },
+    {
+      "id": "dirt",
+      "modification": "copied",
+      "output": "src/images/game/blocks/dirt.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/dirt.png"
+    },
+    {
+      "id": "dirt_variant",
+      "modification": "variant_warm",
+      "output": "src/images/game/blocks/dirt_variant.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/dirt.png"
+    },
+    {
+      "id": "farmland",
+      "modification": "farmland",
+      "output": "src/images/game/blocks/farmland.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/dirt.png"
+    },
+    {
+      "id": "glass",
+      "modification": "copied",
+      "output": "src/images/game/blocks/glass.png",
+      "renderLayer": "translucent",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/glass.png"
+    },
+    {
+      "id": "glass_frame",
+      "modification": "copied",
+      "output": "src/images/game/blocks/glass_frame.png",
+      "renderLayer": "translucent",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/glass_frame.png"
+    },
+    {
+      "id": "gold_ore",
+      "modification": "copied",
+      "output": "src/images/game/blocks/gold_ore.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/stone_gold.png"
+    },
+    {
+      "id": "gold_ore_variant",
+      "modification": "variant_warm",
+      "output": "src/images/game/blocks/gold_ore_variant.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/stone_gold.png"
+    },
+    {
+      "id": "grass_plant",
+      "modification": "copied",
+      "output": "src/images/game/blocks/grass_plant.png",
+      "renderLayer": "cutout",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/grass1.png"
+    },
+    {
+      "id": "grass_side",
+      "modification": "copied",
+      "output": "src/images/game/blocks/grass_side.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/dirt_grass.png"
+    },
+    {
+      "id": "grass_side_variant",
+      "modification": "variant_cool",
+      "output": "src/images/game/blocks/grass_side_variant.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/dirt_grass.png"
+    },
+    {
+      "id": "grass_top",
+      "modification": "copied",
+      "output": "src/images/game/blocks/grass_top.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/grass_top.png"
+    },
+    {
+      "id": "grass_top_variant",
+      "modification": "variant_cool",
+      "output": "src/images/game/blocks/grass_top_variant.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/grass_top.png"
+    },
+    {
+      "id": "gravel",
+      "modification": "copied",
+      "output": "src/images/game/blocks/gravel.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/gravel_stone.png"
+    },
+    {
+      "id": "ice",
+      "modification": "copied",
+      "output": "src/images/game/blocks/ice.png",
+      "renderLayer": "translucent",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/ice.png"
+    },
+    {
+      "id": "iron_ore",
+      "modification": "copied",
+      "output": "src/images/game/blocks/iron_ore.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/stone_silver.png"
+    },
+    {
+      "id": "iron_ore_variant",
+      "modification": "variant_cool",
+      "output": "src/images/game/blocks/iron_ore_variant.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/stone_silver.png"
+    },
+    {
+      "id": "lava",
+      "modification": "copied",
+      "output": "src/images/game/blocks/lava.png",
+      "renderLayer": "emissive",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/lava.png"
+    },
+    {
+      "id": "leaves",
+      "modification": "copied",
+      "output": "src/images/game/blocks/leaves.png",
+      "renderLayer": "cutout",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/leaves_transparent.png"
+    },
+    {
+      "id": "leaves_variant",
+      "modification": "variant_warm",
+      "output": "src/images/game/blocks/leaves_variant.png",
+      "renderLayer": "cutout",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/leaves_transparent.png"
+    },
+    {
+      "id": "log_end",
+      "modification": "copied",
+      "output": "src/images/game/blocks/log_end.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/trunk_top.png"
+    },
+    {
+      "id": "log_side",
+      "modification": "copied",
+      "output": "src/images/game/blocks/log_side.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/trunk_side.png"
+    },
+    {
+      "id": "mossy_stone",
+      "modification": "copied",
+      "output": "src/images/game/blocks/mossy_stone.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/rock_moss.png"
+    },
+    {
+      "id": "obsidian",
+      "modification": "obsidian",
+      "output": "src/images/game/blocks/obsidian.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/greystone.png"
+    },
+    {
+      "id": "oven",
+      "modification": "copied",
+      "output": "src/images/game/blocks/oven.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/oven.png"
+    },
+    {
+      "id": "pale_log_end",
+      "modification": "copied",
+      "output": "src/images/game/blocks/pale_log_end.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/trunk_white_top.png"
+    },
+    {
+      "id": "pale_log_side",
+      "modification": "copied",
+      "output": "src/images/game/blocks/pale_log_side.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/trunk_white_side.png"
+    },
+    {
+      "id": "pale_wood",
+      "modification": "pale_wood",
+      "output": "src/images/game/blocks/pale_wood.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/wood.png"
+    },
+    {
+      "id": "polished_stone",
+      "modification": "copied",
+      "output": "src/images/game/blocks/polished_stone.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/greystone.png"
+    },
+    {
+      "id": "red_wood",
+      "modification": "copied",
+      "output": "src/images/game/blocks/red_wood.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/wood_red.png"
+    },
+    {
+      "id": "sand",
+      "modification": "copied",
+      "output": "src/images/game/blocks/sand.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/sand.png"
+    },
+    {
+      "id": "sand_variant",
+      "modification": "variant_warm",
+      "output": "src/images/game/blocks/sand_variant.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/sand.png"
+    },
+    {
+      "id": "snow",
+      "modification": "copied",
+      "output": "src/images/game/blocks/snow.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/snow.png"
+    },
+    {
+      "id": "stone",
+      "modification": "copied",
+      "output": "src/images/game/blocks/stone.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/stone.png"
+    },
+    {
+      "id": "stone_variant",
+      "modification": "variant_cool",
+      "output": "src/images/game/blocks/stone_variant.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/stone.png"
+    },
+    {
+      "id": "table",
+      "modification": "copied",
+      "output": "src/images/game/blocks/table.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/table.png"
+    },
+    {
+      "id": "water",
+      "modification": "water",
+      "output": "src/images/game/blocks/water.png",
+      "renderLayer": "translucent",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/water.png"
+    },
+    {
+      "id": "wheat_0",
+      "modification": "copied",
+      "output": "src/images/game/blocks/wheat_0.png",
+      "renderLayer": "cutout",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/wheat_stage1.png"
+    },
+    {
+      "id": "wheat_1",
+      "modification": "copied",
+      "output": "src/images/game/blocks/wheat_1.png",
+      "renderLayer": "cutout",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/wheat_stage2.png"
+    },
+    {
+      "id": "wheat_2",
+      "modification": "copied",
+      "output": "src/images/game/blocks/wheat_2.png",
+      "renderLayer": "cutout",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/wheat_stage3.png"
+    },
+    {
+      "id": "wheat_3",
+      "modification": "copied",
+      "output": "src/images/game/blocks/wheat_3.png",
+      "renderLayer": "cutout",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/wheat_stage4.png"
+    },
+    {
+      "id": "wood",
+      "modification": "copied",
+      "output": "src/images/game/blocks/wood.png",
+      "renderLayer": "opaque",
+      "source": "src/images/assets/kenney-voxel-pack/tiles/wood.png"
+    },
+    {
+      "id": "bed_end",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/blocks/bed_end.png",
+      "renderLayer": "opaque",
+      "source": "project-generated"
+    },
+    {
+      "id": "bed_frame",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/blocks/bed_frame.png",
+      "renderLayer": "opaque",
+      "source": "project-generated"
+    },
+    {
+      "id": "bed_side",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/blocks/bed_side.png",
+      "renderLayer": "opaque",
+      "source": "project-generated"
+    },
+    {
+      "id": "bed_top",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/blocks/bed_top.png",
+      "renderLayer": "opaque",
+      "source": "project-generated"
+    },
+    {
+      "id": "chest_front",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/blocks/chest_front.png",
+      "renderLayer": "opaque",
+      "source": "project-generated"
+    },
+    {
+      "id": "chest_side",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/blocks/chest_side.png",
+      "renderLayer": "opaque",
+      "source": "project-generated"
+    },
+    {
+      "id": "chest_top",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/blocks/chest_top.png",
+      "renderLayer": "opaque",
+      "source": "project-generated"
+    },
+    {
+      "id": "crafting_front",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/blocks/crafting_front.png",
+      "renderLayer": "opaque",
+      "source": "project-generated"
+    },
+    {
+      "id": "crafting_side",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/blocks/crafting_side.png",
+      "renderLayer": "opaque",
+      "source": "project-generated"
+    },
+    {
+      "id": "crafting_top",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/blocks/crafting_top.png",
+      "renderLayer": "opaque",
+      "source": "project-generated"
+    },
+    {
+      "id": "door_bottom",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/blocks/door_bottom.png",
+      "renderLayer": "opaque",
+      "source": "project-generated"
+    },
+    {
+      "id": "door_top",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/blocks/door_top.png",
+      "renderLayer": "opaque",
+      "source": "project-generated"
+    },
+    {
+      "id": "enchanting_front",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/blocks/enchanting_front.png",
+      "renderLayer": "emissive",
+      "source": "project-generated"
+    },
+    {
+      "id": "enchanting_side",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/blocks/enchanting_side.png",
+      "renderLayer": "emissive",
+      "source": "project-generated"
+    },
+    {
+      "id": "enchanting_top",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/blocks/enchanting_top.png",
+      "renderLayer": "emissive",
+      "source": "project-generated"
+    },
+    {
+      "id": "furnace_side",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/blocks/furnace_side.png",
+      "renderLayer": "opaque",
+      "source": "project-generated"
+    },
+    {
+      "id": "furnace_top",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/blocks/furnace_top.png",
+      "renderLayer": "opaque",
+      "source": "project-generated"
+    },
+    {
+      "id": "ladder",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/blocks/ladder.png",
+      "renderLayer": "cutout",
+      "source": "project-generated"
+    },
+    {
+      "id": "lamp_off",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/blocks/lamp_off.png",
+      "renderLayer": "opaque",
+      "source": "project-generated"
+    },
+    {
+      "id": "lamp_on",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/blocks/lamp_on.png",
+      "renderLayer": "emissive",
+      "source": "project-generated"
+    },
+    {
+      "id": "lantern",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/blocks/lantern.png",
+      "renderLayer": "emissive",
+      "source": "project-generated"
+    },
+    {
+      "id": "portal",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/blocks/portal.png",
+      "renderLayer": "emissive",
+      "source": "project-generated"
+    },
+    {
+      "id": "torch",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/blocks/torch.png",
+      "renderLayer": "emissive",
+      "source": "project-generated"
+    },
+    {
+      "id": "trapdoor",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/blocks/trapdoor.png",
+      "renderLayer": "cutout",
+      "source": "project-generated"
+    },
+    {
+      "id": "window",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/blocks/window.png",
+      "renderLayer": "translucent",
+      "source": "project-generated"
+    },
+    {
+      "id": "coal",
+      "modification": "copied",
+      "output": "src/images/game/items/coal.png",
+      "source": "src/images/assets/kenney-voxel-pack/items/ore_coal.png"
+    },
+    {
+      "id": "seeds",
+      "modification": "copied",
+      "output": "src/images/game/items/seeds.png",
+      "source": "src/images/assets/kenney-voxel-pack/items/seed.png"
+    },
+    {
+      "id": "stone_axe",
+      "modification": "stone_tool",
+      "output": "src/images/game/items/stone_axe.png",
+      "source": "src/images/assets/kenney-voxel-pack/items/axe_iron.png"
+    },
+    {
+      "id": "stone_pickaxe",
+      "modification": "stone_tool",
+      "output": "src/images/game/items/stone_pickaxe.png",
+      "source": "src/images/assets/kenney-voxel-pack/items/pick_iron.png"
+    },
+    {
+      "id": "stone_shovel",
+      "modification": "stone_tool",
+      "output": "src/images/game/items/stone_shovel.png",
+      "source": "src/images/assets/kenney-voxel-pack/items/shovel_iron.png"
+    },
+    {
+      "id": "wheat",
+      "modification": "copied",
+      "output": "src/images/game/items/wheat.png",
+      "source": "src/images/assets/kenney-voxel-pack/items/wheat.png"
+    },
+    {
+      "id": "wooden_axe",
+      "modification": "wooden_tool",
+      "output": "src/images/game/items/wooden_axe.png",
+      "source": "src/images/assets/kenney-voxel-pack/items/axe_bronze.png"
+    },
+    {
+      "id": "wooden_hoe",
+      "modification": "wooden_tool",
+      "output": "src/images/game/items/wooden_hoe.png",
+      "source": "src/images/assets/kenney-voxel-pack/items/hoe_bronze.png"
+    },
+    {
+      "id": "wooden_pickaxe",
+      "modification": "wooden_tool",
+      "output": "src/images/game/items/wooden_pickaxe.png",
+      "source": "src/images/assets/kenney-voxel-pack/items/pick_bronze.png"
+    },
+    {
+      "id": "wooden_shovel",
+      "modification": "wooden_tool",
+      "output": "src/images/game/items/wooden_shovel.png",
+      "source": "src/images/assets/kenney-voxel-pack/items/shovel_bronze.png"
+    },
+    {
+      "id": "stick",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/items/stick.png",
+      "source": "project-generated"
+    },
+    {
+      "id": "iron_ingot",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/items/iron_ingot.png",
+      "source": "project-generated"
+    },
+    {
+      "id": "copper_ingot",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/items/copper_ingot.png",
+      "source": "project-generated"
+    },
+    {
+      "id": "gold_ingot",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/items/gold_ingot.png",
+      "source": "project-generated"
+    },
+    {
+      "id": "crystal",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/items/crystal.png",
+      "source": "project-generated"
+    },
+    {
+      "id": "spawn_sheep",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/items/spawn_sheep.png",
+      "source": "project-generated"
+    },
+    {
+      "id": "spawn_rabbit",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/items/spawn_rabbit.png",
+      "source": "project-generated"
+    },
+    {
+      "id": "spawn_glow_sprite",
+      "modification": "original scripted pixel art",
+      "output": "src/images/game/items/spawn_glow_sprite.png",
+      "source": "project-generated"
+    },
+    {
+      "id": "model_barrel",
+      "modification": "rendered from project glTF cuboids",
+      "output": "src/images/game/items/model_barrel.png",
+      "source": "src/images/game/models/previews/barrel.png"
+    },
+    {
+      "id": "model_basket",
+      "modification": "rendered from project glTF cuboids",
+      "output": "src/images/game/items/model_basket.png",
+      "source": "src/images/game/models/previews/basket.png"
+    },
+    {
+      "id": "model_bench",
+      "modification": "rendered from project glTF cuboids",
+      "output": "src/images/game/items/model_bench.png",
+      "source": "src/images/game/models/previews/bench.png"
+    },
+    {
+      "id": "model_bush",
+      "modification": "rendered from project glTF cuboids",
+      "output": "src/images/game/items/model_bush.png",
+      "source": "src/images/game/models/previews/bush.png"
+    },
+    {
+      "id": "model_cabinet",
+      "modification": "rendered from project glTF cuboids",
+      "output": "src/images/game/items/model_cabinet.png",
+      "source": "src/images/game/models/previews/cabinet.png"
+    },
+    {
+      "id": "model_chair",
+      "modification": "rendered from project glTF cuboids",
+      "output": "src/images/game/items/model_chair.png",
+      "source": "src/images/game/models/previews/chair.png"
+    },
+    {
+      "id": "model_crate",
+      "modification": "rendered from project glTF cuboids",
+      "output": "src/images/game/items/model_crate.png",
+      "source": "src/images/game/models/previews/crate.png"
+    },
+    {
+      "id": "model_fallen_log",
+      "modification": "rendered from project glTF cuboids",
+      "output": "src/images/game/items/model_fallen_log.png",
+      "source": "src/images/game/models/previews/fallen_log.png"
+    },
+    {
+      "id": "model_floor_lamp",
+      "modification": "rendered from project glTF cuboids",
+      "output": "src/images/game/items/model_floor_lamp.png",
+      "source": "src/images/game/models/previews/floor_lamp.png"
+    },
+    {
+      "id": "model_flowerpot",
+      "modification": "rendered from project glTF cuboids",
+      "output": "src/images/game/items/model_flowerpot.png",
+      "source": "src/images/game/models/previews/flowerpot.png"
+    },
+    {
+      "id": "model_hanging_lantern",
+      "modification": "rendered from project glTF cuboids",
+      "output": "src/images/game/items/model_hanging_lantern.png",
+      "source": "src/images/game/models/previews/hanging_lantern.png"
+    },
+    {
+      "id": "model_path_marker",
+      "modification": "rendered from project glTF cuboids",
+      "output": "src/images/game/items/model_path_marker.png",
+      "source": "src/images/game/models/previews/path_marker.png"
+    },
+    {
+      "id": "model_planter",
+      "modification": "rendered from project glTF cuboids",
+      "output": "src/images/game/items/model_planter.png",
+      "source": "src/images/game/models/previews/planter.png"
+    },
+    {
+      "id": "model_rock",
+      "modification": "rendered from project glTF cuboids",
+      "output": "src/images/game/items/model_rock.png",
+      "source": "src/images/game/models/previews/rock.png"
+    },
+    {
+      "id": "model_rug",
+      "modification": "rendered from project glTF cuboids",
+      "output": "src/images/game/items/model_rug.png",
+      "source": "src/images/game/models/previews/rug.png"
+    },
+    {
+      "id": "model_shelf",
+      "modification": "rendered from project glTF cuboids",
+      "output": "src/images/game/items/model_shelf.png",
+      "source": "src/images/game/models/previews/shelf.png"
+    },
+    {
+      "id": "model_sign",
+      "modification": "rendered from project glTF cuboids",
+      "output": "src/images/game/items/model_sign.png",
+      "source": "src/images/game/models/previews/sign.png"
+    },
+    {
+      "id": "model_stool",
+      "modification": "rendered from project glTF cuboids",
+      "output": "src/images/game/items/model_stool.png",
+      "source": "src/images/game/models/previews/stool.png"
+    },
+    {
+      "id": "model_wall_art",
+      "modification": "rendered from project glTF cuboids",
+      "output": "src/images/game/items/model_wall_art.png",
+      "source": "src/images/game/models/previews/wall_art.png"
+    },
+    {
+      "id": "model_wood_table",
+      "modification": "rendered from project glTF cuboids",
+      "output": "src/images/game/items/model_wood_table.png",
+      "source": "src/images/game/models/previews/wood_table.png"
+    },
+    {
+      "assetType": "model",
+      "id": "model:barrel",
+      "modification": "original scripted low-poly model",
+      "output": "src/images/game/models/barrel.gltf",
+      "source": "project-generated"
+    },
+    {
+      "assetType": "model",
+      "id": "model:basket",
+      "modification": "original scripted low-poly model",
+      "output": "src/images/game/models/basket.gltf",
+      "source": "project-generated"
+    },
+    {
+      "assetType": "model",
+      "id": "model:bench",
+      "modification": "original scripted low-poly model",
+      "output": "src/images/game/models/bench.gltf",
+      "source": "project-generated"
+    },
+    {
+      "assetType": "model",
+      "id": "model:bush",
+      "modification": "original scripted low-poly model",
+      "output": "src/images/game/models/bush.gltf",
+      "source": "project-generated"
+    },
+    {
+      "assetType": "model",
+      "id": "model:cabinet",
+      "modification": "original scripted low-poly model",
+      "output": "src/images/game/models/cabinet.gltf",
+      "source": "project-generated"
+    },
+    {
+      "assetType": "model",
+      "id": "model:chair",
+      "modification": "original scripted low-poly model",
+      "output": "src/images/game/models/chair.gltf",
+      "source": "project-generated"
+    },
+    {
+      "assetType": "model",
+      "id": "model:crate",
+      "modification": "original scripted low-poly model",
+      "output": "src/images/game/models/crate.gltf",
+      "source": "project-generated"
+    },
+    {
+      "assetType": "model",
+      "id": "model:fallen_log",
+      "modification": "original scripted low-poly model",
+      "output": "src/images/game/models/fallen_log.gltf",
+      "source": "project-generated"
+    },
+    {
+      "assetType": "model",
+      "id": "model:floor_lamp",
+      "modification": "original scripted low-poly model",
+      "output": "src/images/game/models/floor_lamp.gltf",
+      "source": "project-generated"
+    },
+    {
+      "assetType": "model",
+      "id": "model:flowerpot",
+      "modification": "original scripted low-poly model",
+      "output": "src/images/game/models/flowerpot.gltf",
+      "source": "project-generated"
+    },
+    {
+      "assetType": "model",
+      "id": "model:hanging_lantern",
+      "modification": "original scripted low-poly model",
+      "output": "src/images/game/models/hanging_lantern.gltf",
+      "source": "project-generated"
+    },
+    {
+      "assetType": "model",
+      "id": "model:path_marker",
+      "modification": "original scripted low-poly model",
+      "output": "src/images/game/models/path_marker.gltf",
+      "source": "project-generated"
+    },
+    {
+      "assetType": "model",
+      "id": "model:planter",
+      "modification": "original scripted low-poly model",
+      "output": "src/images/game/models/planter.gltf",
+      "source": "project-generated"
+    },
+    {
+      "assetType": "model",
+      "id": "model:rock",
+      "modification": "original scripted low-poly model",
+      "output": "src/images/game/models/rock.gltf",
+      "source": "project-generated"
+    },
+    {
+      "assetType": "model",
+      "id": "model:rug",
+      "modification": "original scripted low-poly model",
+      "output": "src/images/game/models/rug.gltf",
+      "source": "project-generated"
+    },
+    {
+      "assetType": "model",
+      "id": "model:shelf",
+      "modification": "original scripted low-poly model",
+      "output": "src/images/game/models/shelf.gltf",
+      "source": "project-generated"
+    },
+    {
+      "assetType": "model",
+      "id": "model:sign",
+      "modification": "original scripted low-poly model",
+      "output": "src/images/game/models/sign.gltf",
+      "source": "project-generated"
+    },
+    {
+      "assetType": "model",
+      "id": "model:stool",
+      "modification": "original scripted low-poly model",
+      "output": "src/images/game/models/stool.gltf",
+      "source": "project-generated"
+    },
+    {
+      "assetType": "model",
+      "id": "model:wall_art",
+      "modification": "original scripted low-poly model",
+      "output": "src/images/game/models/wall_art.gltf",
+      "source": "project-generated"
+    },
+    {
+      "assetType": "model",
+      "id": "model:wood_table",
+      "modification": "original scripted low-poly model",
+      "output": "src/images/game/models/wood_table.gltf",
+      "source": "project-generated"
+    }
+  ],
+  "license": "CC0-1.0",
+  "source": "https://kenney.nl/assets/voxel-pack",
+  "version": 3
+}

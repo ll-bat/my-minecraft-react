@@ -8,6 +8,10 @@
 # testing
 /coverage
 
+# Python build-script caches
+__pycache__/
+*.py[cod]
+
 # production
 /build
 

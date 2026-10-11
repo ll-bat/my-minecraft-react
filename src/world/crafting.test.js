@@ -20,4 +20,11 @@ describe("crafting", () => {
         expect(findCraftingRecipe(grid, 2)).toBeNull();
         expect(findCraftingRecipe(grid, 3).result.itemId).toBe("wooden_pickaxe");
     });
+
+    test("crafts construction shapes in useful batches", () => {
+        const slabs = [stack("wood"), stack("wood"), stack("wood"), null, null, null, null, null, null];
+        const stairs = [stack("stone"), null, null, stack("stone"), stack("stone"), null, stack("stone"), stack("stone"), stack("stone")];
+        expect(findCraftingRecipe(slabs, 3).result).toEqual({itemId: "wood_slab", count: 6});
+        expect(findCraftingRecipe(stairs, 3).result).toEqual({itemId: "stone_stairs", count: 4});
+    });
 });

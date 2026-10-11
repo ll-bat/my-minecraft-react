@@ -1,0 +1,200 @@
+{
+  "cellSize": 128,
+  "entries": {
+    "coal": {
+      "size": 128,
+      "x": 0,
+      "y": 0
+    },
+    "copper_ingot": {
+      "size": 128,
+      "x": 128,
+      "y": 0
+    },
+    "crystal": {
+      "size": 128,
+      "x": 256,
+      "y": 0
+    },
+    "gold_ingot": {
+      "size": 128,
+      "x": 384,
+      "y": 0
+    },
+    "iron_ingot": {
+      "size": 128,
+      "x": 512,
+      "y": 0
+    },
+    "model_barrel": {
+      "size": 128,
+      "x": 640,
+      "y": 0
+    },
+    "model_basket": {
+      "size": 128,
+      "x": 768,
+      "y": 0
+    },
+    "model_bench": {
+      "size": 128,
+      "x": 896,
+      "y": 0
+    },
+    "model_bush": {
+      "size": 128,
+      "x": 0,
+      "y": 128
+    },
+    "model_cabinet": {
+      "size": 128,
+      "x": 128,
+      "y": 128
+    },
+    "model_chair": {
+      "size": 128,
+      "x": 256,
+      "y": 128
+    },
+    "model_crate": {
+      "size": 128,
+      "x": 384,
+      "y": 128
+    },
+    "model_fallen_log": {
+      "size": 128,
+      "x": 512,
+      "y": 128
+    },
+    "model_floor_lamp": {
+      "size": 128,
+      "x": 640,
+      "y": 128
+    },
+    "model_flowerpot": {
+      "size": 128,
+      "x": 768,
+      "y": 128
+    },
+    "model_hanging_lantern": {
+      "size": 128,
+      "x": 896,
+      "y": 128
+    },
+    "model_path_marker": {
+      "size": 128,
+      "x": 0,
+      "y": 256
+    },
+    "model_planter": {
+      "size": 128,
+      "x": 128,
+      "y": 256
+    },
+    "model_rock": {
+      "size": 128,
+      "x": 256,
+      "y": 256
+    },
+    "model_rug": {
+      "size": 128,
+      "x": 384,
+      "y": 256
+    },
+    "model_shelf": {
+      "size": 128,
+      "x": 512,
+      "y": 256
+    },
+    "model_sign": {
+      "size": 128,
+      "x": 640,
+      "y": 256
+    },
+    "model_stool": {
+      "size": 128,
+      "x": 768,
+      "y": 256
+    },
+    "model_wall_art": {
+      "size": 128,
+      "x": 896,
+      "y": 256
+    },
+    "model_wood_table": {
+      "size": 128,
+      "x": 0,
+      "y": 384
+    },
+    "seeds": {
+      "size": 128,
+      "x": 128,
+      "y": 384
+    },
+    "spawn_glow_sprite": {
+      "size": 128,
+      "x": 256,
+      "y": 384
+    },
+    "spawn_rabbit": {
+      "size": 128,
+      "x": 384,
+      "y": 384
+    },
+    "spawn_sheep": {
+      "size": 128,
+      "x": 512,
+      "y": 384
+    },
+    "stick": {
+      "size": 128,
+      "x": 640,
+      "y": 384
+    },
+    "stone_axe": {
+      "size": 128,
+      "x": 768,
+      "y": 384
+    },
+    "stone_pickaxe": {
+      "size": 128,
+      "x": 896,
+      "y": 384
+    },
+    "stone_shovel": {
+      "size": 128,
+      "x": 0,
+      "y": 512
+    },
+    "wheat": {
+      "size": 128,
+      "x": 128,
+      "y": 512
+    },
+    "wooden_axe": {
+      "size": 128,
+      "x": 256,
+      "y": 512
+    },
+    "wooden_hoe": {
+      "size": 128,
+      "x": 384,
+      "y": 512
+    },
+    "wooden_pickaxe": {
+      "size": 128,
+      "x": 512,
+      "y": 512
+    },
+    "wooden_shovel": {
+      "size": 128,
+      "x": 640,
+      "y": 512
+    }
+  },
+  "size": [
+    1024,
+    1024
+  ],
+  "version": 1
+}

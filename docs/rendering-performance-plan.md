@@ -1,6 +1,6 @@
 # Rendering Performance Plan
 
-**Status:** Background terrain generation and lighting, worker-built mesh buffers, nearest-first streaming, frame-budgeted activation, stale-result protection, persistence, and the 1–4 selector are implemented. Greedy meshing and a texture atlas remain optional follow-up work if GPU profiling shows that Ultra distance needs them.
+**Status:** Complete. Background terrain generation and lighting, worker-built mesh buffers, nearest-first streaming, frame-budgeted activation, stale-result protection, persistence, the 1–4 selector, shared texture atlases, texture-preserving greedy meshing, transparent batch separation, and live F3 performance measurements are implemented.
 
 ## Goal
 
@@ -25,13 +25,14 @@ Keep movement and camera input smooth while terrain streams, including at render
 
 4. **Configurable render distance**
    - Add render-distance choices from 1 through 4 to the game menu.
-   - Keep 2 as the default and persist the selected value with the world.
+   - Keep 4 (Ultra) as the default and persist the selected value with the world.
 
-5. **Validation and later optimization**
+5. **Validation and optimization**
    - Test worker-equivalent generation, request cancellation, retained views, activation order, and persistence.
    - Build render and collision geometry in a second Web Worker, keeping the previous mesh active until its replacement is ready.
    - Calculate generated-column block lighting in the terrain worker.
-   - If distance 4 remains GPU-bound, add greedy meshing, shared materials, and a texture atlas.
+   - Merge compatible opaque faces while retaining one atlas-tile repeat per voxel.
+   - Track frame, renderer, worker, installation, memory, render-layer, and model-category measurements against distance 2 and 4 budgets.
 
 ## Completion criteria
 

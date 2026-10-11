@@ -10,6 +10,13 @@ const blockDefinitions = Object.fromEntries(Object.values(BLOCK_BY_ID).map((bloc
         shape: block.shape,
         solid: Boolean(block.solid),
         transparent: Boolean(block.transparent),
+        textures: block.textures,
+        variants: block.variants,
+        atlasEntries: block.atlasEntries,
+        collisionBounds: block.collisionBounds,
+        biomeTint: block.biomeTint,
+        biomeTintFaces: block.biomeTintFaces,
+        animation: block.animation,
     },
 ]));
 
@@ -25,13 +32,15 @@ describe("mesh streaming fallback", () => {
             revision: 1,
             blockStates: new Map(),
             blockDefinitions,
+            worldSeed: "stream-test",
         };
 
         const streamed = await buildChunkMeshAsync(request);
-        const direct = buildChunkMeshData(chunks, chunkKey, chunks.get(chunkKey), 1);
+        const direct = buildChunkMeshData(chunks, chunkKey, chunks.get(chunkKey), 1, new Map(), "stream-test");
 
-        expect(streamed.materials.get("stone").positions).toEqual(direct.materials.get("stone").positions);
-        expect(streamed.materials.get("glass").uvs).toEqual(direct.materials.get("glass").uvs);
+        expect(streamed.materials.get("atlas:opaque").positions).toEqual(direct.materials.get("atlas:opaque").positions);
+        expect(streamed.materials.get("atlas:translucent:static:glass").uvs).toEqual(direct.materials.get("atlas:translucent:static:glass").uvs);
+        expect(streamed.materials.get("atlas:opaque").colors).toEqual(direct.materials.get("atlas:opaque").colors);
         expect(streamed.collision).toEqual(direct.collision);
     });
 });

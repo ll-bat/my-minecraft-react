@@ -1,4 +1,5 @@
-import {BLOCKS} from "./blocks";
+import {BLOCKS, BLOCK_BY_ID} from "./blocks";
+import {itemArtwork} from "../images/gameAssets";
 
 const ITEM_BLOCKS = BLOCKS.filter((block) => block.id !== "bedrock" && !block.internal);
 
@@ -7,7 +8,8 @@ const BLOCK_ITEMS = ITEM_BLOCKS.map((block) => ({
     name: block.name,
     maxStack: 64,
     blockId: block.id,
-    image: block.image,
+    atlasPreview: block.atlasPreview,
+    modelPreview: block.modelPreview,
     texture: block.texture,
     uiColor: block.uiColor,
 }));
@@ -21,13 +23,13 @@ const MATERIAL_ITEMS = [
     {id: "crystal", name: "Crystal", maxStack: 64, uiColor: "#72e3ea"},
     {id: "seeds", name: "Seeds", maxStack: 64, uiColor: "#77a642"},
     {id: "wheat", name: "Wheat", maxStack: 64, uiColor: "#dfbd55"},
-];
+].map((item) => ({...item, artwork: itemArtwork(item.id)}));
 
 const CREATURE_ITEMS = [
     {id: "spawn_sheep", name: "Sheep Friend", maxStack: 64, creatureType: "sheep", uiColor: "#eee9df"},
     {id: "spawn_rabbit", name: "Rabbit Friend", maxStack: 64, creatureType: "rabbit", uiColor: "#b88455"},
     {id: "spawn_glow_sprite", name: "Glow Sprite Friend", maxStack: 64, creatureType: "glow_sprite", uiColor: "#ffe66d"},
-];
+].map((item) => ({...item, artwork: itemArtwork(item.id)}));
 
 const TOOL_ITEMS = [
     {id: "wooden_pickaxe", name: "Wooden Pickaxe", toolType: "pickaxe", tier: 1, speed: 2.5, maxDurability: 30, uiColor: "#a97742"},
@@ -37,7 +39,7 @@ const TOOL_ITEMS = [
     {id: "stone_axe", name: "Stone Axe", toolType: "axe", tier: 2, speed: 4, maxDurability: 65, uiColor: "#777777"},
     {id: "stone_shovel", name: "Stone Shovel", toolType: "shovel", tier: 2, speed: 4, maxDurability: 65, uiColor: "#777777"},
     {id: "wooden_hoe", name: "Wooden Hoe", toolType: "hoe", tier: 1, speed: 1, maxDurability: 40, uiColor: "#a97742"},
-].map((item) => ({...item, maxStack: 1}));
+].map((item) => ({...item, maxStack: 1, artwork: itemArtwork(item.id)}));
 
 export const ITEMS = [...BLOCK_ITEMS, ...MATERIAL_ITEMS, ...TOOL_ITEMS, ...CREATURE_ITEMS];
 
@@ -47,19 +49,22 @@ export function isItemId(value) {
     return Object.prototype.hasOwnProperty.call(ITEM_BY_ID, value);
 }
 
-const UTILITY_BLOCKS = new Set(["crafting_table", "furnace", "chest", "door", "trapdoor", "ladder", "bed", "torch", "switch", "lamp", "farmland", "portal", "enchanting_table"]);
-const NATURE_BLOCKS = new Set(["grass", "dirt", "sand", "water", "lava", "log", "leaves", "tall_grass", "flower", "coal_ore", "iron_ore", "copper_ore", "gold_ore", "crystal_ore"]);
+const UTILITY_BLOCKS = new Set(["crafting_table", "furnace", "chest", "door", "trapdoor", "ladder", "bed", "torch", "lantern", "switch", "lamp", "farmland", "portal", "enchanting_table"]);
+const FLUID_BLOCKS = new Set(["water", "lava"]);
+const NATURE_BLOCKS = new Set(["grass", "dirt", "sand", "gravel", "snow", "ice", "log", "pale_log", "leaves", "tall_grass", "flower", "cactus", "coal_ore", "iron_ore", "copper_ore", "gold_ore", "crystal_ore"]);
 
-export const ITEM_CATEGORY_ORDER = ["blocks", "windows", "doors", "utility", "nature", "materials", "tools", "creatures"];
-export const ITEM_CATEGORY_NAMES = {blocks: "Blocks", windows: "Windows", doors: "Doors", utility: "Utility", nature: "Nature", materials: "Materials", tools: "Tools", creatures: "Creatures"};
+export const ITEM_CATEGORY_ORDER = ["blocks", "windows", "doors", "utility", "nature", "fluids", "furniture", "decor", "outdoor", "materials", "tools", "creatures"];
+export const ITEM_CATEGORY_NAMES = {blocks: "Blocks", windows: "Windows", doors: "Doors", utility: "Utility", nature: "Nature", fluids: "Fluids", furniture: "Furniture", decor: "Decor", outdoor: "Outdoor", materials: "Materials", tools: "Tools", creatures: "Creatures"};
 
 export function itemCategory(item) {
     if (item.creatureType) return "creatures";
     if (item.toolType) return "tools";
     if (!item.blockId) return "materials";
+    if (BLOCK_BY_ID[item.blockId]?.modelCategory) return BLOCK_BY_ID[item.blockId].modelCategory;
     if (item.blockId === "window") return "windows";
     if (item.blockId === "door") return "doors";
     if (UTILITY_BLOCKS.has(item.blockId)) return "utility";
+    if (FLUID_BLOCKS.has(item.blockId)) return "fluids";
     if (NATURE_BLOCKS.has(item.blockId)) return "nature";
     return "blocks";
 }

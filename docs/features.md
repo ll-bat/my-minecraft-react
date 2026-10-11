@@ -279,7 +279,7 @@ Water depends on chunking, transparent block rendering, and block property suppo
 
 These features should come after the single-player world and save model are stable.
 
-**Status: Complete.** Multiplayer is excluded from the current project scope. Multiple isolated worlds, export/import, exploration tools, deterministic structures, rare resources, peaceful goals and enchantments, Dream Grove portal travel, and validated namespaced data packs are implemented. The ordered implementation is documented in `docs/phase-10-plan.md`.
+**Status: Complete.** Multiplayer is excluded from the current project scope. Multiple isolated worlds, export/import, exploration tools, deterministic structures, rare resources, peaceful goals and enchantments, Dream Grove portal travel, and validated namespaced data packs are implemented. Seeded Overworld structures now include sparse furnished houses, four-floor pool hotels, and five-floor residential buildings with biome-aware styles. The ordered implementation is documented in `docs/phase-10-plan.md`.
 
 1. **World creation and management UI**
    - Create, name, list, open, export, import, and delete multiple worlds.
@@ -291,6 +291,8 @@ These features should come after the single-player world and save model are stab
 
 3. **Structures and progression**
    - Generate villages, ruins, puzzle vaults, and other seeded structures without hostile encounters.
+   - Place biome-aware houses only on suitable dry terrain, keep them well spaced, and furnish them with functional doors, windows, lights, and decorative objects.
+   - Add rarer multi-floor hotels with pools and tall residential buildings while keeping each generated landmark safe for column-based streaming.
    - Add rarer materials, enchantments, and progression goals only when their supporting systems exist.
 
 4. **Dimensions or alternate worlds**

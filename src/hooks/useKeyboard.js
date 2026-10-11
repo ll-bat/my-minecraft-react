@@ -7,8 +7,10 @@ function actionByKey(key) {
         KeyA: 'moveLeft',
         KeyD: 'moveRight',
         Space: 'jump',
-        ShiftLeft: 'swimDown',
-        ShiftRight: 'swimDown',
+        ShiftLeft: 'crouch',
+        ShiftRight: 'crouch',
+        ControlLeft: 'sprint',
+        ControlRight: 'sprint',
     }
     return keyActionMap[key];
 }
@@ -20,7 +22,8 @@ export const useKeyboard = () => {
         moveLeft: false,
         moveRight: false,
         jump: false,
-        swimDown: false,
+        crouch: false,
+        sprint: false,
     });
 
     const handleKeyDown = useCallback((e) => {

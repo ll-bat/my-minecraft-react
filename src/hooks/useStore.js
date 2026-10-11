@@ -35,7 +35,9 @@ import {
     CREATURE_TYPES,
     interactWithCreature,
     isNightTime,
+    spawnCommunityForStructure,
     spawnCreaturesForColumn,
+    spawnFishForColumn,
     updateCreature
 } from "../world/entities";
 import {rebuildBlockLight} from "../world/lighting";
@@ -51,10 +53,12 @@ import {consumeItem} from "../world/inventory";
 import {worldCatalog} from "../world/worldStorage";
 import {registerDataPack, registerSavedPacks, saveDataPack} from "../world/dataPacks";
 import {generateTerrainColumnAsync} from "../world/terrainStreaming";
+import {addStructure, cityCenter, structureForColumn} from "../world/structures";
 
 export {WORLD_STORAGE_KEY};
 
 export const RENDER_DISTANCE = 4;
+export const MAX_RENDER_DISTANCE = 9;
 const TERRAIN_LIGHT_DEFINITIONS = Object.fromEntries(Object.values(BLOCK_BY_ID).map((block) => [
     block.id,
     {
@@ -89,6 +93,28 @@ function bumpRevisions(revisions, keys) {
     return next;
 }
 
+function itemCount(inventory, itemId) {
+    return inventory.reduce((total, stack) => total + (stack?.itemId === itemId ? stack.count : 0), 0);
+}
+
+function removeItems(inventory, itemId, requested) {
+    let remaining = requested;
+    const next = inventory.map((stack) => {
+        if (!stack || stack.itemId !== itemId || remaining <= 0) return stack ? {...stack} : null;
+        const removed = Math.min(stack.count, remaining);
+        remaining -= removed;
+        return stack.count === removed ? null : {...stack, count: stack.count - removed};
+    });
+    return remaining === 0 ? next : null;
+}
+
+function communityGroupForStructure(structure) {
+    if (!structure) return null;
+    return structure.type === "city"
+        ? `${structure.id}:${structure.districtX},${structure.districtZ}:community`
+        : `${structure.id}:community`;
+}
+
 function mergeGeneratedColumn(chunks, generated) {
     const next = new Map(chunks);
     generated.forEach((generatedChunk, key) => {
@@ -104,11 +130,15 @@ function mergeGeneratedColumn(chunks, generated) {
 export function renderColumnOffsets(distance) {
     const normalized = Math.max(0, Number(distance) || 0);
     const edge = Math.ceil(normalized);
-    const rounded = !Number.isInteger(normalized);
+    // Extra views keep their full reach on every axis while rounding the
+    // distant corners. Extra 2x therefore uses about twice Extra's columns
+    // instead of paying for a 19 by 19 square.
+    const rounded = !Number.isInteger(normalized) || normalized >= 6;
     const offsets = [];
     for (let x = -edge; x <= edge; x += 1) {
         for (let z = -edge; z <= edge; z += 1) {
-            if (!rounded || Math.hypot(x, z) <= normalized + 1) offsets.push([x, z]);
+            const padding = normalized >= 9 ? 0.25 : normalized >= 6 ? 0.5 : 1;
+            if (!rounded || Math.hypot(x, z) <= normalized + padding) offsets.push([x, z]);
         }
     }
     return offsets;
@@ -128,6 +158,28 @@ function initialState() {
     const saved = readWorld();
     const seed = saved?.seed ?? DEFAULT_WORLD_SEED;
     const playerPosition = saved?.playerPosition ?? spawnPosition(seed);
+    const generatedCityMarker = {id: "generated-small-city", name: "Small City", position: cityCenter(seed), dimension: "overworld", color: "#e4b65d"};
+    const markers = saved?.markers?.some((marker) => marker.id === generatedCityMarker.id)
+        ? saved.markers
+        : [...(saved?.markers ?? []), generatedCityMarker];
+    const spawnedCreatureGroups = new Set(saved?.spawnedCreatureGroups ?? []);
+    let entities = saved?.entities ?? [];
+    if ((saved?.gameRules?.creatures ?? true) && saved?.chunks) {
+        (saved.discoveredStructures ?? []).forEach((structure) => {
+            const group = communityGroupForStructure(structure);
+            if (spawnedCreatureGroups.has(group)) return;
+            entities = [...entities, ...spawnCommunityForStructure(seed, structure, saved.chunks)];
+            spawnedCreatureGroups.add(group);
+        });
+        const centerChunk = [chunkCoordinate(playerPosition[0]), chunkCoordinate(playerPosition[2])];
+        (saved.generatedColumns ?? []).forEach((key) => {
+            const [chunkX, chunkZ] = key.split(",").map(Number);
+            const group = `${key}:fish`;
+            if (spawnedCreatureGroups.has(group) || Math.hypot(chunkX - centerChunk[0], chunkZ - centerChunk[1]) > (saved.renderDistance ?? RENDER_DISTANCE) + 1) return;
+            entities = [...entities, ...spawnFishForColumn(seed, chunkX, chunkZ, saved.chunks, playerPosition)];
+            spawnedCreatureGroups.add(group);
+        });
+    }
     return {
         seed,
         worldUid: saved?.worldMeta?.id ?? "world-default",
@@ -155,14 +207,14 @@ function initialState() {
         blockLight: rebuildBlockLight(saved?.chunks ?? new Map()),
         station: null,
         stationPosition: null,
-        entities: saved?.entities ?? [],
-        spawnedCreatureGroups: saved?.spawnedCreatureGroups ?? new Set(),
+        entities,
+        spawnedCreatureGroups,
         worldTime: saved?.worldTime ?? 0,
         dimension: saved?.dimension ?? "overworld",
         dimensionSnapshots: saved?.dimensionSnapshots ?? new Map(),
         exploredColumns: saved?.exploredColumns ?? new Set(),
         discoveredBiomes: saved?.discoveredBiomes ?? new Set(),
-        markers: saved?.markers ?? [],
+        markers,
         discoveredStructures: saved?.discoveredStructures ?? [],
         goals: saved?.goals ?? {},
         gameRules: saved?.gameRules ?? {dayCycle: true, weather: true, creatures: true, cropGrowth: true},
@@ -172,6 +224,9 @@ function initialState() {
         mapOpen: false,
         worldManagerOpen: false,
         creatureFeedback: "",
+        villagerPanelId: null,
+        mountedEntityId: null,
+        teleportRequest: null,
         interactionFeedback: "",
         soundEvent: null,
         particleEvent: null,
@@ -276,6 +331,46 @@ export const useStore = create((set, get) => ({
                 const key = columnKey(chunkX, chunkZ);
                 const beforeGeneration = get();
                 if (beforeGeneration.generatedColumns.has(key)) {
+                    const existingStructure = generationIdentity.dimension === "overworld"
+                        ? structureForColumn(generationIdentity.seed, chunkX, chunkZ, generationIdentity.dimension)
+                        : null;
+                    const cityBuiltGroup = existingStructure?.type === "city"
+                        ? `${existingStructure.id}:${existingStructure.districtX},${existingStructure.districtZ}:built`
+                        : null;
+                    if (cityBuiltGroup && !beforeGeneration.spawnedCreatureGroups.has(cityBuiltGroup)) {
+                        set((state) => {
+                            const chunks = addStructure(state.chunks, generationIdentity.seed, {...existingStructure, dimensionSeed: generationIdentity.seed});
+                            const spawnedCreatureGroups = new Set(state.spawnedCreatureGroups).add(cityBuiltGroup);
+                            const communityGroup = communityGroupForStructure(existingStructure);
+                            let entities = state.entities;
+                            if (state.gameRules.creatures && !spawnedCreatureGroups.has(communityGroup)) {
+                                entities = [...entities, ...spawnCommunityForStructure(generationIdentity.seed, existingStructure, chunks)];
+                                spawnedCreatureGroups.add(communityGroup);
+                            }
+                            const structureIsNew = !state.discoveredStructures.some((entry) => entry.id === existingStructure.id);
+                            const revisedKeys = Array.from(chunks.keys()).filter((chunkKeyValue) => {
+                                const [existingX, , existingZ] = parseChunkKey(chunkKeyValue);
+                                return existingX === chunkX && existingZ === chunkZ;
+                            }).flatMap(neighboringChunkKeys);
+                            return {
+                                chunks,
+                                entities,
+                                spawnedCreatureGroups,
+                                chunkRevisions: bumpRevisions(state.chunkRevisions, revisedKeys),
+                                ...(structureIsNew ? {
+                                    discoveredStructures: [...state.discoveredStructures, existingStructure],
+                                    goals: {...state.goals, structures: (state.goals.structures ?? 0) + 1},
+                                } : {}),
+                            };
+                        });
+                    }
+                    const fishGroup = `${key}:fish`;
+                    if (beforeGeneration.gameRules.creatures && generationIdentity.dimension === "overworld" && !beforeGeneration.spawnedCreatureGroups.has(fishGroup)) {
+                        set((state) => ({
+                            entities: [...state.entities, ...spawnFishForColumn(generationIdentity.seed, chunkX, chunkZ, state.chunks, state.playerPosition)],
+                            spawnedCreatureGroups: new Set(state.spawnedCreatureGroups).add(fishGroup),
+                        }));
+                    }
                     const existingKeys = Array.from(beforeGeneration.chunks.keys()).filter((chunkKeyValue) => {
                         const [existingX, , existingZ] = parseChunkKey(chunkKeyValue);
                         return existingX === chunkX && existingZ === chunkZ;
@@ -320,6 +415,19 @@ export const useStore = create((set, get) => ({
                                 false
                             )];
                             spawnedCreatureGroups.add(creatureGroup);
+                        }
+                        const fishGroup = `${key}:fish`;
+                        if (state.gameRules.creatures && generationIdentity.dimension === "overworld" && !spawnedCreatureGroups.has(fishGroup)) {
+                            entities = [...entities, ...spawnFishForColumn(generationIdentity.seed, chunkX, chunkZ, chunks, state.playerPosition)];
+                            spawnedCreatureGroups.add(fishGroup);
+                        }
+                        const communityGroup = communityGroupForStructure(structure);
+                        if (state.gameRules.creatures && communityGroup && !spawnedCreatureGroups.has(communityGroup)) {
+                            entities = [...entities, ...spawnCommunityForStructure(generationIdentity.seed, structure, chunks)];
+                            spawnedCreatureGroups.add(communityGroup);
+                        }
+                        if (structure?.type === "city") {
+                            spawnedCreatureGroups.add(`${structure.id}:${structure.districtX},${structure.districtZ}:built`);
                         }
                         const structureIsNew = structure
                             && !state.discoveredStructures.some((entry) => entry.id === structure.id);
@@ -585,6 +693,23 @@ export const useStore = create((set, get) => ({
             get().travelDimension();
             return true;
         }
+        if (blockId === "elevator") {
+            const stops = [];
+            for (let y = WORLD_MIN_Y + 1; y <= WORLD_MAX_Y; y += 1) {
+                if (getBlock(state.chunks, [position[0], y, position[2]]) === "elevator") stops.push(y);
+            }
+            if (stops.length < 2) {
+                set({interactionFeedback: "Add another elevator platform directly above or below this one"});
+                return true;
+            }
+            const nextY = stops.find((y) => y > position[1]) ?? stops[0];
+            set({
+                teleportRequest: {id: nanoid(), position: [position[0], nextY + 1.05, position[2]]},
+                interactionFeedback: `Elevator: floor ${stops.indexOf(nextY) + 1}`,
+                soundEvent: {id: nanoid(), type: "toggle", blockId},
+            });
+            return true;
+        }
         const toggled = toggleBlock(state.chunks, position);
         if (toggled) {
             const blockStates = new Map(state.blockStates);
@@ -642,17 +767,22 @@ export const useStore = create((set, get) => ({
         const stack = state.inventory[state.selectedHotbar];
         const item = stack ? ITEM_BY_ID[stack.itemId] : null;
         const targetId = getBlock(state.chunks, target);
-        if (item?.creatureType && placement[1] > target[1] && !getBlock(state.chunks, placement)) {
-            const type = item.creatureType;
+        const requestedType = item?.creatureType ?? item?.vehicleType;
+        const aquaticPlacement = requestedType && CREATURE_TYPES[requestedType]?.aquatic && targetId === "water";
+        if (requestedType && (aquaticPlacement || (placement[1] > target[1] && !getBlock(state.chunks, placement)))) {
+            const type = requestedType;
+            const entityPosition = aquaticPlacement
+                ? [target[0], target[1], target[2]]
+                : [placement[0], target[1] + (CREATURE_TYPES[type].groundOffset ?? 0.5), placement[2]];
             const entity = {
                 id: `${type}:placed:${nanoid()}`, type,
-                position: [placement[0], target[1] + (CREATURE_TYPES[type].groundOffset ?? 0.5), placement[2]],
+                position: entityPosition,
                 velocity: [0, 0, 0], health: CREATURE_TYPES[type].maxHealth,
-                animationState: "happy", heading: 0, friendLevel: 1, followUntil: Date.now() + 45000,
+                animationState: "happy", heading: 0, friendLevel: 1, followUntil: item.creatureType ? Date.now() + 45000 : 0,
                 lastInteraction: Date.now(), lastGift: 0, persistent: true,
                 chunk: [chunkCoordinate(placement[0]), chunkCoordinate(placement[2])],
             };
-            set({entities: [...state.entities, entity], creatureFeedback: `${CREATURE_TYPES[type].name} joined the world as your friend`, soundEvent: {id: nanoid(), type: "creature"}});
+            set({entities: [...state.entities, entity], creatureFeedback: `${CREATURE_TYPES[type].name} is ready`, soundEvent: {id: nanoid(), type: "creature"}});
             return true;
         }
         if (item?.toolType === "hoe" && (targetId === "dirt" || targetId === "grass") && placement[1] > target[1]) {
@@ -781,11 +911,11 @@ export const useStore = create((set, get) => ({
 
     updateCreatures: (now = Date.now(), deltaSeconds = 0.2) => set((state) => {
         let entities = state.entities.map((entity) => updateCreature(entity, state, now, deltaSeconds));
-        if (entities.length > 64) {
+        if (entities.length > 192) {
             entities = entities.filter((entity) => entity.persistent || Math.hypot(
                 entity.position[0] - state.playerPosition[0],
                 entity.position[2] - state.playerPosition[2]
-            ) <= 96).slice(-64);
+            ) <= 96).slice(-192);
         }
         return {entities};
     }),
@@ -800,6 +930,21 @@ export const useStore = create((set, get) => ({
             entity.position[1] - state.playerPosition[1],
             entity.position[2] - state.playerPosition[2]
         ) > 6) return false;
+        if (entity.type === "villager") {
+            const entities = state.entities.slice();
+            entities[index] = {...entity, lastInteraction: now, animationState: "happy"};
+            set({entities, villagerPanelId: id, inventoryOpen: false, creatureFeedback: `${entity.name} the ${entity.profession} welcomes you`});
+            return true;
+        }
+        if (CREATURE_TYPES[entity.type]?.rideable) {
+            const mounting = state.mountedEntityId !== id;
+            set({
+                mountedEntityId: mounting ? id : null,
+                teleportRequest: mounting ? {id: nanoid(), position: [entity.position[0], entity.position[1] + 0.55, entity.position[2]]} : null,
+                creatureFeedback: mounting ? `Riding ${CREATURE_TYPES[entity.type].name} · Shift to dismount` : `Dismounted ${CREATURE_TYPES[entity.type].name}`,
+            });
+            return true;
+        }
         const interaction = interactWithCreature(entity, now);
         if (!interaction.changed) return false;
         const entities = state.entities.slice();
@@ -830,6 +975,44 @@ export const useStore = create((set, get) => ({
     },
 
     clearCreatureFeedback: () => set({creatureFeedback: ""}),
+    closeVillagerPanel: () => set({villagerPanelId: null}),
+    tradeWithVillager: () => {
+        const state = get();
+        const villager = state.entities.find((entity) => entity.id === state.villagerPanelId && entity.type === "villager");
+        if (!villager?.trade) return false;
+        const {costItem, costCount, rewardItem, rewardCount} = villager.trade;
+        if (state.gameMode === "survival" && itemCount(state.inventory, costItem) < costCount) {
+            set({creatureFeedback: `You need ${costCount} ${ITEM_BY_ID[costItem]?.name ?? costItem}`});
+            return false;
+        }
+        const paid = state.gameMode === "survival" ? removeItems(state.inventory, costItem, costCount) : state.inventory;
+        const rewarded = addItem(paid, rewardItem, rewardCount);
+        if (rewarded.remainder) return false;
+        const entities = state.entities.map((entity) => entity.id === villager.id
+            ? {...entity, friendLevel: Math.min(5, entity.friendLevel + 1), animationState: "happy"}
+            : entity);
+        set({entities, inventory: rewarded.slots, ...(state.gameMode === "survival" ? {survivalInventory: rewarded.slots} : {}), creatureFeedback: `${villager.name} completed the trade`});
+        return true;
+    },
+    completeVillagerTask: () => {
+        const state = get();
+        const villager = state.entities.find((entity) => entity.id === state.villagerPanelId && entity.type === "villager");
+        if (!villager?.task || villager.task.complete) return false;
+        const task = villager.task;
+        if (state.gameMode === "survival" && itemCount(state.inventory, task.itemId) < task.count) {
+            set({creatureFeedback: `Bring ${task.count} ${ITEM_BY_ID[task.itemId]?.name ?? task.itemId}`});
+            return false;
+        }
+        const supplied = state.gameMode === "survival" ? removeItems(state.inventory, task.itemId, task.count) : state.inventory;
+        const rewarded = addItem(supplied, task.rewardItem, task.rewardCount);
+        if (rewarded.remainder) return false;
+        const entities = state.entities.map((entity) => entity.id === villager.id
+            ? {...entity, friendLevel: Math.min(5, entity.friendLevel + 2), task: {...entity.task, complete: true}, animationState: "happy"}
+            : entity);
+        set({entities, inventory: rewarded.slots, ...(state.gameMode === "survival" ? {survivalInventory: rewarded.slots} : {}), creatureFeedback: `${villager.name} thanks you for helping the community`, goals: {...state.goals, villageTasks: (state.goals.villageTasks ?? 0) + 1}});
+        return true;
+    },
+    dismount: () => set((state) => ({mountedEntityId: null, creatureFeedback: state.mountedEntityId ? "Dismounted" : state.creatureFeedback})),
     clearInteractionFeedback: () => set({interactionFeedback: ""}),
     emitSound: (type, blockId = null) => set({soundEvent: {id: nanoid(), type, blockId}}),
 
@@ -842,7 +1025,7 @@ export const useStore = create((set, get) => ({
     },
 
     setRenderDistance: (renderDistance) => {
-        if (!Number.isInteger(renderDistance) || renderDistance < 1 || renderDistance > 4) return false;
+        if (!Number.isInteger(renderDistance) || renderDistance < 1 || renderDistance > MAX_RENDER_DISTANCE) return false;
         set({renderDistance});
         return true;
     },
@@ -885,8 +1068,12 @@ export const useStore = create((set, get) => ({
         exploredColumns.add(`${get().dimension}:${columnKey(...playerChunk)}`);
         const discoveredBiomes = new Set(get().discoveredBiomes);
         discoveredBiomes.add(`${get().dimension}:${biomeAt(get().seed, position[0], position[2])}`);
+        const entities = get().mountedEntityId ? get().entities.map((entity) => entity.id === get().mountedEntityId
+            ? {...entity, position: [position[0], position[1] - 0.55, position[2]], chunk: playerChunk, animationState: "walking"}
+            : entity) : get().entities;
         set({
             playerPosition: position,
+            entities,
             exploredColumns,
             discoveredBiomes,
             goals: {...get().goals, explored: exploredColumns.size},
@@ -908,6 +1095,7 @@ export const useStore = create((set, get) => ({
     createWorld: (requestedSeed, requestedName = "My World", requestedId = `world-${Date.now()}`) => {
         const seed = String(requestedSeed).trim() || DEFAULT_WORLD_SEED;
         const spawn = spawnPosition(seed);
+        const cityPosition = cityCenter(seed);
         set((state) => ({
             seed,
             worldUid: requestedId,
@@ -941,7 +1129,7 @@ export const useStore = create((set, get) => ({
             dimensionSnapshots: new Map(),
             exploredColumns: new Set(),
             discoveredBiomes: new Set(),
-            markers: [],
+            markers: [{id: "generated-small-city", name: "Small City", position: cityPosition, dimension: "overworld", color: "#e4b65d"}],
             discoveredStructures: [],
             goals: {},
             gameRules: {dayCycle: true, weather: true, creatures: true, cropGrowth: true},
@@ -950,6 +1138,9 @@ export const useStore = create((set, get) => ({
             mapOpen: false,
             worldManagerOpen: false,
             creatureFeedback: "",
+            villagerPanelId: null,
+            mountedEntityId: null,
+            teleportRequest: null,
             interactionFeedback: "",
             soundEvent: null,
             particleEvent: null,
@@ -1016,6 +1207,9 @@ export const useStore = create((set, get) => ({
             spawn: spawnPosition(targetSeed),
             chunkRevisions: new Map(), activeChunkKeys: [], blockLight: rebuildBlockLight(targetChunks),
             worldId: state.worldId + 1,
+            villagerPanelId: null,
+            mountedEntityId: null,
+            teleportRequest: null,
             interactionFeedback: target === "dream_grove" ? "Entered the peaceful Dream Grove" : "Returned to the Overworld",
             goals: {...state.goals, dimensions: Math.max(state.goals.dimensions ?? 1, 2)},
         };

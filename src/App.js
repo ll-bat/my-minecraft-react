@@ -10,12 +10,13 @@ import {FluidSimulation} from "./components/FluidSimulation";
 import {Inventory} from "./components/Inventory";
 import {ItemDrops} from "./components/ItemDrops";
 import {FurnaceSimulation} from "./components/FurnaceSimulation";
-import {CreatureFeedback, Creatures} from "./components/Creatures";
+import {CommunityPanel, CreatureFeedback, Creatures} from "./components/Creatures";
 import {CreatureSimulation} from "./components/CreatureSimulation";
 import {BlockSimulation} from "./components/BlockSimulation";
 import {BlockParticles, FurnaceSmoke, GameAudio, HeldItem, InteractionFeedback, WorldLights} from "./components/WorldFeedback";
 import {AdvancedShortcuts, DataPackManager, DebugOverlay, MapPanel, WorldManager} from "./components/AdvancedUI";
 import {RenderingDiagnostics} from "./components/RenderingDiagnostics";
+import {AmbientSky} from "./components/AmbientSky";
 
 function App() {
     return (
@@ -24,6 +25,7 @@ function App() {
                 <RenderingDiagnostics/>
                 <WorldEnvironment/>
                 <WorldLights/>
+                <AmbientSky/>
                 <FPV/>
                 <Physics>
                     <ChunkWorld/>
@@ -45,6 +47,7 @@ function App() {
             <Menu/>
             <Inventory/>
             <CreatureFeedback/>
+            <CommunityPanel/>
             <InteractionFeedback/>
             <AdvancedShortcuts/>
             <DebugOverlay/>

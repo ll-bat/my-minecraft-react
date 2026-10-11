@@ -60,6 +60,8 @@ export const Menu = () => {
                     <option value={2}>2 · Medium</option>
                     <option value={3}>3 · High</option>
                     <option value={4}>4 · Ultra</option>
+                    <option value={6}>6 · Extra</option>
+                    <option value={9}>9 · Extra 2x</option>
                 </select>
             </label>
             <span role="status">{saveStatus}</span>

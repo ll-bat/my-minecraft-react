@@ -1,8 +1,11 @@
 /* global globalThis */
 import {buildChunkMeshDataCore} from "../world/chunkGeometryCore";
 
+let blockDefinitions = {};
+
 globalThis.addEventListener("message", (event) => {
-    const {id, chunks, chunkKey, selectedChunk, revision, blockStates, blockDefinitions, worldSeed} = event.data;
+    const {id, chunks, chunkKey, selectedChunk, revision, blockStates, worldSeed} = event.data;
+    if (event.data.blockDefinitions) blockDefinitions = event.data.blockDefinitions;
     const startedAt = performance.now();
     const mesh = buildChunkMeshDataCore(
         chunks,

@@ -5,7 +5,7 @@ import {BufferGeometry, DoubleSide, Float32BufferAttribute, Matrix4, Vector3} fr
 import {useStore} from "../hooks/useStore";
 import {BLOCK_BY_ID} from "../world/blocks";
 import {voxelFromIntersection} from "../world/chunkGeometry";
-import {getBlock, neighboringChunkKeys} from "../world/chunks";
+import {chunkCoordinate, getBlock, meshingChunkNeighborhood, parseChunkKey} from "../world/chunks";
 import {blockIntersectsPlayer, MAX_INTERACTION_DISTANCE, positionKey} from "../world/coordinates";
 import {isPartialShape, rotateBounds, shapeParts} from "../world/blockShapes";
 import {miningDuration} from "../world/mining";
@@ -147,7 +147,15 @@ const BreakingOverlay = ({breaking}) => {
     );
 };
 
-const Chunk = memo(({chunkKey, onPointerDown, onPointerOut}) => {
+const ChunkCollision = ({collision}) => {
+    const [collisionRef] = useTrimesh(() => ({
+        args: [collision.vertices, collision.indices],
+        type: "Static",
+    }), undefined, [collision]);
+    return <mesh ref={collisionRef} visible={false}/>;
+};
+
+const Chunk = memo(({chunkKey, collisionEnabled, interactive, onPointerDown, onPointerOut}) => {
     const blockMap = useStore((state) => state.chunks.get(chunkKey));
     const revision = useStore((state) => state.chunkRevisions.get(chunkKey) ?? 0);
     const [meshData, setMeshData] = useState(EMPTY_MESH_DATA);
@@ -155,9 +163,7 @@ const Chunk = memo(({chunkKey, onPointerDown, onPointerOut}) => {
     useEffect(() => {
         let cancelled = false;
         const state = useStore.getState();
-        const chunks = new Map(neighboringChunkKeys(chunkKey)
-            .map((key) => [key, state.chunks.get(key)])
-            .filter(([, chunk]) => Boolean(chunk)));
+        const chunks = meshingChunkNeighborhood(state.chunks, chunkKey);
 
         buildChunkMeshAsync({
             chunks,
@@ -184,11 +190,6 @@ const Chunk = memo(({chunkKey, onPointerDown, onPointerOut}) => {
         return {geometries, installMs: performance.now() - startedAt};
     }, [meshData]);
     const geometries = installed.geometries;
-    const [collisionRef] = useTrimesh(() => ({
-        args: [meshData.collision.vertices, meshData.collision.indices],
-        type: "Static",
-    }), undefined, [meshData]);
-
     useEffect(() => () => {
         geometries.forEach(({geometry}) => geometry.dispose());
     }, [geometries]);
@@ -206,15 +207,15 @@ const Chunk = memo(({chunkKey, onPointerDown, onPointerOut}) => {
                     <mesh
                         key={materialKey}
                         geometry={geometry}
-                        onPointerDown={onPointerDown}
-                        onPointerOut={onPointerOut}
+                        onPointerDown={interactive ? onPointerDown : undefined}
+                        onPointerOut={interactive ? onPointerOut : undefined}
                         renderOrder={atlas?.layer === "translucent" ? 3 : atlas?.layer === "cutout" ? 1 : 0}
                     >
                         <ChunkMaterial atlas={atlas} block={block} materialKey={materialKey}/>
                     </mesh>
                 );
             })}
-            <mesh ref={collisionRef} visible={false} />
+            {collisionEnabled && <ChunkCollision collision={meshData.collision}/>}
         </group>
     );
 });
@@ -222,6 +223,7 @@ const Chunk = memo(({chunkKey, onPointerDown, onPointerOut}) => {
 export const ChunkWorld = () => {
     const {camera} = useThree();
     const playerChunk = useStore((state) => state.playerChunk);
+    const playerChunkY = useStore((state) => chunkCoordinate(state.playerPosition[1]));
     const activeChunkKeys = useStore((state) => state.activeChunkKeys);
     const renderDistance = useStore((state) => state.renderDistance);
     const worldId = useStore((state) => state.worldId);
@@ -231,12 +233,58 @@ export const ChunkWorld = () => {
     const interactBlock = useStore((state) => state.interactBlock);
     const selectedItemAction = useStore((state) => state.applySelectedItemToBlock);
     const [breaking, setBreaking] = useState(null);
+    const [collisionChunkKeys, setCollisionChunkKeys] = useState(() => new Set());
     const breakingTimer = useRef(null);
     const breakingRelease = useRef(null);
 
     useEffect(() => {
         ensureColumns(playerChunk[0], playerChunk[1], renderDistance);
     }, [ensureColumns, playerChunk, renderDistance, worldId]);
+
+    const collisionCandidates = useMemo(() => activeChunkKeys
+        .filter((key) => {
+            const [chunkX, chunkY, chunkZ] = parseChunkKey(key);
+            return Math.max(
+                Math.abs(chunkX - playerChunk[0]),
+                Math.abs(chunkZ - playerChunk[1])
+            ) <= 2 && Math.abs(chunkY - playerChunkY) <= 2;
+        })
+        .sort((left, right) => {
+            const distance = (key) => {
+                const [x, y, z] = parseChunkKey(key);
+                return Math.max(Math.abs(x - playerChunk[0]), Math.abs(z - playerChunk[1])) * 10
+                    + Math.abs(y - playerChunkY);
+            };
+            return distance(left) - distance(right);
+        }), [activeChunkKeys, playerChunk, playerChunkY]);
+
+    useEffect(() => {
+        let cancelled = false;
+        let frame = null;
+        const desired = new Set(collisionCandidates);
+        let installed = collisionChunkKeys;
+        setCollisionChunkKeys((current) => {
+            const retained = new Set(Array.from(current).filter((key) => desired.has(key)));
+            installed = retained;
+            return retained;
+        });
+        const pending = collisionCandidates.filter((key) => !installed.has(key));
+        const installNext = () => {
+            if (cancelled) return;
+            const key = pending.shift();
+            if (!key) return;
+            setCollisionChunkKeys((current) => new Set(current).add(key));
+            frame = window.requestAnimationFrame(installNext);
+        };
+        installNext();
+        return () => {
+            cancelled = true;
+            if (frame !== null) window.cancelAnimationFrame(frame);
+        };
+    // The current set is read once to seed this reconciliation; including it
+    // would restart the queue after every progressively installed body.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [collisionCandidates]);
 
     const cancelBreaking = useCallback(() => {
         if (breakingRelease.current) {
@@ -322,14 +370,21 @@ export const ChunkWorld = () => {
 
     return (
         <>
-            {activeChunkKeys.map((key) => (
-                <Chunk
+            {activeChunkKeys.map((key) => {
+                const [chunkX, chunkY, chunkZ] = parseChunkKey(key);
+                const horizontalDistance = Math.max(
+                    Math.abs(chunkX - playerChunk[0]),
+                    Math.abs(chunkZ - playerChunk[1])
+                );
+                return <Chunk
                     key={key}
                     chunkKey={key}
+                    collisionEnabled={collisionChunkKeys.has(key)}
+                    interactive={horizontalDistance <= 1 && Math.abs(chunkY - playerChunkY) <= 1}
                     onPointerDown={handlePointerDown}
                     onPointerOut={cancelBreaking}
-                />
-            ))}
+                />;
+            })}
             <ModelObjects onPointerDown={handlePointerDown} onPointerOut={cancelBreaking}/>
             {breaking && <BreakingOverlay breaking={breaking}/>}
         </>

@@ -114,4 +114,26 @@ describe("world storage", () => {
         expect(migrated.renderDistance).toBe(4);
         expect(current.renderDistance).toBe(2);
     });
+
+    test("persists the optional Extra view distance", () => {
+        const parsed = parseWorldDocument(JSON.stringify({
+            version: 8,
+            seed: "extra-view",
+            texture: "dirt",
+            renderDistance: 6,
+            chunks: [],
+        }));
+        expect(parsed.renderDistance).toBe(6);
+    });
+
+    test("persists the Extra 2x view distance", () => {
+        const parsed = parseWorldDocument(JSON.stringify({
+            version: 8,
+            seed: "extra-2x-view",
+            texture: "dirt",
+            renderDistance: 9,
+            chunks: [],
+        }));
+        expect(parsed.renderDistance).toBe(9);
+    });
 });

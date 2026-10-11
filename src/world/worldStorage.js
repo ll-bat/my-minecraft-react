@@ -186,7 +186,7 @@ export function parseWorldDocument(serialized, legacySerialized = null) {
                 : 0,
             gameMode: migrated || document.gameMode === "creative" ? "creative" : "survival",
             renderDistance: document.version >= 8 && Number.isInteger(document.renderDistance)
-                ? Math.max(1, Math.min(4, document.renderDistance))
+                ? Math.max(1, Math.min(9, document.renderDistance))
                 : 4,
             drops: migrated || !Array.isArray(document.drops) ? [] : document.drops.filter((drop) => (
                 drop

@@ -10,6 +10,7 @@ import {getBlock} from "../world/chunks";
 import {ModelItemMesh} from "./ModelObjects";
 
 const SOUND_FREQUENCIES = {place: 190, break: 120, step: 90, water: 150, open: 260, toggle: 220, switch: 320, rest: 410, till: 140, plant: 280, harvest: 360, creature: 460, pickup: 520, ambient: 70};
+const MAX_DYNAMIC_LIGHTS = 8;
 
 function playTone(type) {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -73,11 +74,20 @@ export const InteractionFeedback = () => {
 export const WorldLights = () => {
     const chunks = useStore((state) => state.chunks);
     const levels = useStore((state) => state.blockLight);
-    const player = useStore((state) => state.playerPosition);
-    const sources = useMemo(() => lightSources(levels, 14).filter(({position}) => (
+    const playerChunk = useStore((state) => state.playerChunk);
+    const allSources = useMemo(() => lightSources(levels, 14).filter(({position}) => (
         emittedLight(getBlock(chunks, position)) > 0
-        && Math.hypot(position[0] - player[0], position[2] - player[2]) < 36
-    )).slice(0, 24), [chunks, levels, player]);
+    )), [chunks, levels]);
+    const sources = useMemo(() => {
+        const playerX = playerChunk[0] * 16 + 8;
+        const playerZ = playerChunk[1] * 16 + 8;
+        return allSources.map((source) => ({
+            ...source,
+            distance: Math.hypot(source.position[0] - playerX, source.position[2] - playerZ),
+        })).filter(({distance}) => distance < 44)
+            .sort((left, right) => left.distance - right.distance)
+            .slice(0, MAX_DYNAMIC_LIGHTS);
+    }, [allSources, playerChunk]);
     return sources.map(({position, level}) => (
         <pointLight key={position.join(",")} position={position} color="#ffd37a" distance={level} intensity={0.9}/>
     ));

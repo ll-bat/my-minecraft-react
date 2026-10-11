@@ -8,6 +8,7 @@ import {positionKey} from "../world/coordinates";
 import {registerModelMetrics, unregisterModelMetrics} from "../world/renderMetrics";
 
 const modelCache = new Map();
+const chunkModelCache = new WeakMap();
 const FACING_ANGLE = {north: 0, east: -Math.PI / 2, south: Math.PI, west: Math.PI / 2};
 
 export function loadModelAsset(url) {
@@ -45,6 +46,18 @@ function modelMaterial(asset, block) {
         material.emissiveIntensity = 0.45;
     }
     return material;
+}
+
+function modelsInChunk(chunkMap, chunk) {
+    const cached = chunkModelCache.get(chunkMap);
+    if (cached) return cached;
+    const models = [];
+    chunkMap.forEach((blockId, index) => {
+        if (!BLOCK_BY_ID[blockId]?.modelId) return;
+        models.push({blockId, position: worldPosition(chunk, indexToLocal(index))});
+    });
+    chunkModelCache.set(chunkMap, models);
+    return models;
 }
 
 const ModelBatch = ({block, instances, onPointerDown, onPointerOut}) => {
@@ -87,16 +100,18 @@ export const ModelObjects = ({onPointerDown, onPointerOut}) => {
     const chunks = useStore((state) => state.chunks);
     const activeChunkKeys = useStore((state) => state.activeChunkKeys);
     const blockStates = useStore((state) => state.blockStates);
+    const playerChunk = useStore((state) => state.playerChunk);
+    const renderDistance = useStore((state) => state.renderDistance);
     const batches = useMemo(() => {
         const grouped = new Map();
+        const modelDistance = renderDistance >= 6 ? 4 : renderDistance;
         activeChunkKeys.forEach((key) => {
             const chunkMap = chunks.get(key);
             if (!chunkMap) return;
             const chunk = parseChunkKey(key);
-            chunkMap.forEach((blockId, index) => {
+            if (Math.max(Math.abs(chunk[0] - playerChunk[0]), Math.abs(chunk[2] - playerChunk[1])) > modelDistance) return;
+            modelsInChunk(chunkMap, chunk).forEach(({blockId, position}) => {
                 const block = BLOCK_BY_ID[blockId];
-                if (!block?.modelId) return;
-                const position = worldPosition(chunk, indexToLocal(index));
                 const state = blockStates.get(positionKey(position)) ?? {};
                 const entries = grouped.get(blockId) ?? [];
                 entries.push({position, facing: state.facing ?? "north"});
@@ -104,7 +119,7 @@ export const ModelObjects = ({onPointerDown, onPointerOut}) => {
             });
         });
         return grouped;
-    }, [activeChunkKeys, blockStates, chunks]);
+    }, [activeChunkKeys, blockStates, chunks, playerChunk, renderDistance]);
 
     return Array.from(batches, ([blockId, instances]) => (
         <ModelBatch

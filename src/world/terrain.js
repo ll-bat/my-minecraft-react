@@ -5,6 +5,8 @@ export const WORLD_MIN_Y = -16;
 export const WORLD_MAX_Y = 64;
 export const SEA_LEVEL = 6;
 const LAKE_CELL_SIZE = 32;
+const HIGHLAND_CELL_SIZE = 240;
+const MAX_TERRAIN_HEIGHT = 50;
 
 export const BIOMES = {
     PLAINS: "plains",
@@ -17,8 +19,7 @@ function clamp(value, minimum, maximum) {
     return Math.max(minimum, Math.min(maximum, value));
 }
 
-export function biomeAt(seed, x, z) {
-    const numericSeed = seedToNumber(seed);
+function climateBiomeAt(seed, x, z, numericSeed = seedToNumber(seed)) {
     const temperature = fractalNoise2D(numericSeed + 1103, x, z, 180, 3);
     const moisture = fractalNoise2D(numericSeed + 2207, x, z, 150, 3);
     const mountainFactor = fractalNoise2D(numericSeed + 3301, x, z, 120, 4);
@@ -35,22 +36,75 @@ export function biomeAt(seed, x, z) {
     return BIOMES.PLAINS;
 }
 
-export function surfaceHeight(seed, x, z) {
+export function elevatedTerrainAt(seed, x, z, numericSeed = seedToNumber(seed)) {
+    const cellX = Math.floor(x / HIGHLAND_CELL_SIZE);
+    const cellZ = Math.floor(z / HIGHLAND_CELL_SIZE);
+    let strongest = null;
+
+    for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
+        for (let offsetZ = -1; offsetZ <= 1; offsetZ += 1) {
+            const highlandCellX = cellX + offsetX;
+            const highlandCellZ = cellZ + offsetZ;
+            if (randomAt(numericSeed + 19001, highlandCellX, 0, highlandCellZ) < 0.35) continue;
+            const centerX = highlandCellX * HIGHLAND_CELL_SIZE
+                + 48 + randomAt(numericSeed + 20011, highlandCellX, 0, highlandCellZ) * 144;
+            const centerZ = highlandCellZ * HIGHLAND_CELL_SIZE
+                + 48 + randomAt(numericSeed + 21013, highlandCellX, 0, highlandCellZ) * 144;
+            const radius = 78 + randomAt(numericSeed + 22003, highlandCellX, 0, highlandCellZ) * 18;
+            const distance = Math.hypot(x - centerX, z - centerZ);
+            if (distance >= radius) continue;
+            const maximumRise = 34 + Math.floor(randomAt(numericSeed + 23003, highlandCellX, 0, highlandCellZ) * 7);
+            const rise = Math.min(maximumRise, Math.max(1, Math.floor((radius - distance) / 2)));
+            if (!strongest || rise > strongest.rise) {
+                strongest = {
+                    rise,
+                    maximumRise,
+                    centerX,
+                    centerZ,
+                    radius,
+                    biome: randomAt(numericSeed + 24001, highlandCellX, 0, highlandCellZ) < 0.48
+                        ? BIOMES.MOUNTAINS
+                        : BIOMES.FOREST,
+                };
+            }
+        }
+    }
+    return strongest;
+}
+
+export function biomeAt(seed, x, z) {
     const numericSeed = seedToNumber(seed);
-    const biome = biomeAt(seed, x, z);
+    const elevated = elevatedTerrainAt(seed, x, z, numericSeed);
+    return elevated?.rise >= 4 ? elevated.biome : climateBiomeAt(seed, x, z, numericSeed);
+}
+
+export function terrainAt(seed, x, z) {
+    const numericSeed = seedToNumber(seed);
+    const climateBiome = climateBiomeAt(seed, x, z, numericSeed);
     const broad = fractalNoise2D(numericSeed + 4409, x, z, 75, 4);
     const detail = fractalNoise2D(numericSeed + 5503, x, z, 24, 3);
+    let baseHeight;
+    if (climateBiome === BIOMES.MOUNTAINS) {
+        baseHeight = clamp(Math.round(14 + Math.abs(broad) * 18 + detail * 6), 10, 42);
+    } else if (climateBiome === BIOMES.DESERT) {
+        baseHeight = clamp(Math.round(5 + broad * 3 + detail), 2, 10);
+    } else if (climateBiome === BIOMES.FOREST) {
+        baseHeight = clamp(Math.round(7 + broad * 5 + detail * 2), 3, 15);
+    } else {
+        baseHeight = clamp(Math.round(6 + broad * 4 + detail * 2), 2, 13);
+    }
 
-    if (biome === BIOMES.MOUNTAINS) {
-        return clamp(Math.round(14 + Math.abs(broad) * 18 + detail * 6), 10, 42);
-    }
-    if (biome === BIOMES.DESERT) {
-        return clamp(Math.round(5 + broad * 3 + detail), 2, 10);
-    }
-    if (biome === BIOMES.FOREST) {
-        return clamp(Math.round(7 + broad * 5 + detail * 2), 3, 15);
-    }
-    return clamp(Math.round(6 + broad * 4 + detail * 2), 2, 13);
+    const elevated = elevatedTerrainAt(seed, x, z, numericSeed);
+    if (!elevated) return {biome: climateBiome, surface: baseHeight, elevated: null};
+    return {
+        biome: elevated.rise >= 4 ? elevated.biome : climateBiome,
+        surface: clamp(baseHeight + elevated.rise, 2, MAX_TERRAIN_HEIGHT),
+        elevated,
+    };
+}
+
+export function surfaceHeight(seed, x, z) {
+    return terrainAt(seed, x, z).surface;
 }
 
 export function hasLakeWater(seed, x, z, surface = surfaceHeight(seed, x, z)) {
@@ -134,8 +188,8 @@ function putBlock(chunks, x, y, z, blockId, replace = true) {
     }
 }
 
-function treeExists(seedNumber, x, z) {
-    return randomAt(seedNumber + 12007, x, 0, z) > 0.972;
+function treeExists(seedNumber, x, z, surface = 0) {
+    return randomAt(seedNumber + 12007, x, 0, z) > (surface >= 24 ? 0.95 : 0.972);
 }
 
 function addTreesAndPlants(chunks, seed, chunkX, chunkZ) {
@@ -147,18 +201,20 @@ function addTreesAndPlants(chunks, seed, chunkX, chunkZ) {
 
     for (let originX = minX - 3; originX <= maxX + 3; originX += 1) {
         for (let originZ = minZ - 3; originZ <= maxZ + 3; originZ += 1) {
-            const biome = biomeAt(seed, originX, originZ);
-            const surface = surfaceHeight(seed, originX, originZ);
+            const {biome, surface} = terrainAt(seed, originX, originZ);
 
             if (hasLakeWater(seed, originX, originZ, surface)) {
                 continue;
             }
 
-            if (biome === BIOMES.FOREST && treeExists(numericSeed, originX, originZ)) {
+            if (biome === BIOMES.FOREST && treeExists(numericSeed, originX, originZ, surface)) {
                 const trunkHeight = 4 + Math.floor(randomAt(numericSeed + 13001, originX, 0, originZ) * 3);
+                const trunkBlock = surface >= 24 && randomAt(numericSeed + 13591, originX, 0, originZ) > 0.52
+                    ? "pale_log"
+                    : "log";
                 for (let y = 1; y <= trunkHeight; y += 1) {
                     if (originX >= minX && originX <= maxX && originZ >= minZ && originZ <= maxZ) {
-                        putBlock(chunks, originX, surface + y, originZ, "log");
+                        putBlock(chunks, originX, surface + y, originZ, trunkBlock);
                     }
                 }
 
@@ -207,8 +263,7 @@ export function generateChunkColumn(seed, chunkX, chunkZ) {
         for (let localZ = 0; localZ < CHUNK_SIZE; localZ += 1) {
             const x = minX + localX;
             const z = minZ + localZ;
-            const biome = biomeAt(seed, x, z);
-            const surface = surfaceHeight(seed, x, z);
+            const {biome, surface} = terrainAt(seed, x, z);
             const lakeWater = hasLakeWater(seed, x, z, surface);
 
             for (let y = WORLD_MIN_Y; y <= surface; y += 1) {
@@ -220,7 +275,11 @@ export function generateChunkColumn(seed, chunkX, chunkZ) {
                 } else if ((biome === BIOMES.DESERT || lakeWater) && y >= surface - 3) {
                     blockId = "sand";
                 } else if (y === surface) {
-                    blockId = biome === BIOMES.MOUNTAINS && surface > 24 ? "stone" : "grass";
+                    blockId = biome === BIOMES.MOUNTAINS && surface >= 44
+                        ? "snow"
+                        : biome === BIOMES.MOUNTAINS && surface > 24 ? "stone" : "grass";
+                } else if (biome === BIOMES.MOUNTAINS && surface > 24 && y >= surface - 4) {
+                    blockId = "stone";
                 } else if (y >= surface - 3) {
                     blockId = "dirt";
                 } else {
@@ -249,19 +308,18 @@ export function spawnPosition(seed) {
                 if (Math.max(Math.abs(x), Math.abs(z)) !== radius) {
                     continue;
                 }
-                const biome = biomeAt(seed, x, z);
+                const {biome, surface} = terrainAt(seed, x, z);
                 let treeNearby = false;
                 for (let dx = -2; dx <= 2; dx += 1) {
                     for (let dz = -2; dz <= 2; dz += 1) {
                         if (
                             biomeAt(seed, x + dx, z + dz) === BIOMES.FOREST
-                            && treeExists(numericSeed, x + dx, z + dz)
+                            && treeExists(numericSeed, x + dx, z + dz, surfaceHeight(seed, x + dx, z + dz))
                         ) {
                             treeNearby = true;
                         }
                     }
                 }
-                const surface = surfaceHeight(seed, x, z);
                 if (biome !== BIOMES.MOUNTAINS && !hasLakeWater(seed, x, z, surface) && !treeNearby) {
                     return [x, surface + 2, z];
                 }

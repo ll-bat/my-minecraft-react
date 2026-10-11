@@ -1,6 +1,6 @@
 # Visual Quality Checklist
 
-Use the visual test area and a normal generated world at view distances 2 and 4. Check daytime, nighttime, rain or snow, and underwater views where relevant.
+Use the visual test area and a normal generated world at view distances 2, 4, 6, and optional Extra 2x distance 9. Check daytime, nighttime, rain or snow, and underwater views where relevant.
 
 ## Blocks and atlases
 

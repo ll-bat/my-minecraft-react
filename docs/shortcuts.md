@@ -9,6 +9,8 @@
 | **A** | Move left. |
 | **D** | Move right. |
 | **Space** | Jump while standing on a solid block. |
+| **Left or Right Control while moving** | Sprint. Horses also move faster than walking speed. |
+| **Left or Right Shift** | Crouch and move carefully. While riding, dismount instead. |
 | **Space while submerged** | Swim upward through water or lava. |
 | **Left Shift or Right Shift while submerged** | Swim downward. |
 | **Space while touching a ladder** | Climb upward. |
@@ -18,7 +20,7 @@
 | **Escape** | Release pointer lock so the menu and hotbar can be clicked. |
 | **E** | Open or close the inventory. Opening it releases pointer lock. |
 | **F3** | Toggle coordinates, lighting, live frame/draw/triangle/memory measurements, mesh timings, and distance 2/4 performance profiles. |
-| **M** | Open or close the explored-chunk map, compass markers, discoveries, and peaceful goals. |
+| **M** | Open or close the explored-chunk map, compass markers, discoveries, and peaceful goals. Every world includes a **Small City** marker to help you find its single generated city. |
 
 ## Block interaction
 
@@ -38,6 +40,9 @@
 | **Right mouse button on a mature crop** | Harvest wheat and seeds, then replant the crop automatically. |
 | **Right mouse button on a Dream Portal** | Travel between the Overworld and the peaceful Dream Grove. A return portal is created in a new destination. |
 | **Either mouse button on a creature** | Pet and befriend the creature. Friendly interactions show hearts and may provide a gift. |
+| **Click a villager** | Open dialogue with the named villager. View their profession, build friendship, complete a community task, or trade. |
+| **Click a horse, boat, or minecart** | Mount it. Horses can jump, boats travel smoothly across water, and minecarts move fastest on track. Press **Shift** to dismount. |
+| **Right mouse button — short click on an elevator** | Travel to the next elevator platform directly above, wrapping to the lowest platform after the top floor. |
 
 Block interaction has a maximum reach of six world units. Placement is rejected when the target position is occupied, outside the build-height limits, or intersects the player.
 
@@ -55,9 +60,10 @@ Creatures never cause damage and cannot be attacked. Befriended creatures follow
 | **Right-click an inventory slot** | Take half a stack or place one held item. |
 | **Shift-click an inventory slot** | Move the stack between the hotbar and main inventory. |
 | **Drag an inventory stack** | Move or merge the stack into the destination slot. |
-| **Click an item in the category catalog** | Add a full stack of that item to an available inventory slot. Categories include Blocks, Windows, Doors, Utility, Nature, Fluids, Furniture, Decor, Outdoor, Materials, Tools, and Creatures. Water and Lava are in Fluids. |
+| **Click an item in the category catalog** | Add a full stack of that item to an available inventory slot. Categories include Blocks, Windows, Doors, Utility, Nature, Fluids, Furniture, Decor, Outdoor, Materials, Tools, Creatures, and Transport. Water and Lava are in Fluids. |
 | **Carry or drag a stack to Trash** | Permanently remove that stack from the inventory. It can be added again later from the category catalog. |
-| **Left-click with a creature item selected** | Place a persistent friendly sheep, rabbit, or glow sprite on top of the targeted block. |
+| **Left-click with a creature or transport item selected** | Place a persistent friendly creature, horse, boat, or minecart on top of the targeted block. |
+| **Left-click water with a fish item selected** | Release one blue, orange, or pink fish into that exact water block. Fish remain in connected water and swim independently. |
 | **Click a crafting output** | Craft the matched recipe into inventory and consume one set of ingredients. |
 | **Click furnace slots** | Insert smeltable input and fuel, or take completed output. |
 | **Click chest slots** | Store and retrieve persistent item stacks. Chest revisions prevent a stale open interface from overwriting newer contents. |
@@ -74,7 +80,7 @@ These controls appear in the menu at the top of the game.
 | **Save** | Save terrain changes, inventory and crafting grids, tool durability, furnace and chest contents, block orientation and power, crop updates, world time, selected hotbar slot, and player position. |
 | **Regenerate** | Recreate the current seed's original terrain after confirmation, discarding unsaved block changes. |
 | **Mode** | Switch between survival inventory rules and the creative item catalog. |
-| **View** | Change the streamed render distance from 1 (Low) through 4 (Ultra). Distance 4 is the default. |
+| **View** | Change the streamed render distance from 1 (Low) through 4 (Ultra), 6 (Extra), or 9 (Extra 2x). Ultra remains the default. |
 | **Worlds** | Create, open, duplicate, export, import, or delete isolated worlds and configure current world rules. |
 | **Map** | Open the explored map, marker list, compass readout, biome discoveries, structures, and goals. |
 | **Packs** | Validate and enable a version-1 JSON data pack with namespaced blocks and recipes. |
@@ -83,6 +89,8 @@ These controls appear in the menu at the top of the game.
 
 ```text
 Move:          W A S D
+Sprint:        Control
+Crouch/dismount: Shift
 Jump/swim up:  Space
 Swim down:     Shift
 Climb ladder:  Space / Shift

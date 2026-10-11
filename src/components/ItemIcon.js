@@ -55,6 +55,8 @@ const COMPOUND_PREVIEW_PARTS = {
     railing: ["railing-post", "railing-top", "railing-bottom"],
     torch: ["torch-stick", "torch-flame"],
     lantern: ["lantern-base", "lantern-body", "lantern-top", "lantern-handle"],
+    track: ["track-rail-left", "track-rail-right", "track-tie-one", "track-tie-two"],
+    elevator: ["elevator-platform"],
 };
 
 const CompoundPreview = ({block}) => (
@@ -96,6 +98,14 @@ const BlockPreview = ({block}) => {
     );
 };
 
+const TransportPreview = ({type}) => (
+    <span className={`transport-preview transport-${type}`}>
+        {type === "horse" && <><i className="horse-body"/><i className="horse-head"/><i className="horse-leg one"/><i className="horse-leg two"/><i className="horse-leg three"/><i className="horse-leg four"/><i className="horse-saddle"/></>}
+        {type === "boat" && <><i className="boat-hull"/><i className="boat-rim left"/><i className="boat-rim right"/></>}
+        {type === "minecart" && <><i className="cart-body"/><i className="cart-inside"/><i className="cart-wheel left"/><i className="cart-wheel right"/></>}
+    </span>
+);
+
 export const ItemIcon = ({itemId, count, durability, className = ""}) => {
     const item = ITEM_BY_ID[itemId];
     if (!item) return null;
@@ -104,6 +114,8 @@ export const ItemIcon = ({itemId, count, durability, className = ""}) => {
         <span className={`item-icon ${className}`} title={item.name}>
             {block
                 ? <BlockPreview block={block}/>
+                : item.vehicleType
+                    ? <TransportPreview type={item.vehicleType}/>
                 : item.artwork
                     ? <span className="item-artwork"><AtlasPreview preview={item.artwork}/></span>
                     : <span className="item-swatch" style={{background: item.uiColor ?? "#777"}} />

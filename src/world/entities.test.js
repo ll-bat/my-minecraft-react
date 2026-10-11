@@ -1,6 +1,6 @@
-import {creatureGroundY, interactWithCreature, isNightTime, spawnCreaturesForColumn, updateCreature} from "./entities";
+import {creatureGroundY, interactWithCreature, isNightTime, spawnCommunityForStructure, spawnCreaturesForColumn, spawnFishForColumn, updateCreature} from "./entities";
 import {surfaceHeight} from "./terrain";
-import {setBlock} from "./chunks";
+import {getBlock, setBlock} from "./chunks";
 
 const creature = {
     id: "sheep:test", type: "sheep", position: [0, 8, 0], velocity: [0, 0, 0], health: 10,
@@ -14,6 +14,38 @@ describe("friendly creatures", () => {
         const second = spawnCreaturesForColumn("friends", 2, 2, [0, 0, 0]);
         expect(second).toEqual(first);
         first.forEach((entity) => expect(Math.hypot(entity.position[0], entity.position[2])).toBeGreaterThanOrEqual(9));
+    });
+
+    test("creates named peaceful residents with professions, tasks, trades, and village transport", () => {
+        const structure = {id: "overworld:4,4", type: "village", chunkX: 4, chunkZ: 4};
+        const first = spawnCommunityForStructure("friends", structure, new Map());
+        const second = spawnCommunityForStructure("friends", structure, new Map());
+        expect(second).toEqual(first);
+        expect(first.filter((entity) => entity.type === "villager")).toHaveLength(5);
+        expect(first.find((entity) => entity.type === "villager")).toMatchObject({
+            name: expect.any(String), profession: expect.any(String), task: expect.any(Object), trade: expect.any(Object), persistent: true,
+        });
+        expect(first.some((entity) => entity.type === "horse")).toBe(true);
+        expect(first.some((entity) => entity.type === "minecart")).toBe(true);
+    });
+
+    test("gives residents in separate city districts unique persistent identities", () => {
+        const base = {id: "overworld:city:4,4", type: "city", chunkX: 4, chunkZ: 4, baseY: 8};
+        const west = spawnCommunityForStructure("friends", {...base, districtX: -1, districtZ: 0}, new Map());
+        const center = spawnCommunityForStructure("friends", {...base, districtX: 0, districtZ: 0}, new Map());
+        expect(new Set([...west, ...center].map((entity) => entity.id)).size).toBe(west.length + center.length);
+    });
+
+    test("spawns colorful fish only inside generated water", () => {
+        let chunks = new Map();
+        for (let x = 16; x < 32; x += 1) for (let z = 16; z < 32; z += 1) chunks = setBlock(chunks, [x, 4, z], "water");
+        const fish = spawnFishForColumn("friends", 1, 1, chunks, [0, 4, 0]);
+        expect(fish.length).toBeGreaterThan(0);
+        expect(fish.length).toBeLessThanOrEqual(3);
+        fish.forEach((entity) => {
+            expect(entity.type).toMatch(/^fish_(blue|orange|pink)$/);
+            expect(getBlock(chunks, entity.position)).toBe("water");
+        });
     });
 
     test("recognizes nighttime in the shared day cycle", () => {
@@ -55,5 +87,17 @@ describe("friendly creatures", () => {
         const result = updateCreature({...creature, position: [0, y, 0]}, state, 1000, 1);
         expect(result.velocity).toEqual([0, 0, 0]);
         expect(result.position[0]).toBe(0);
+    });
+
+    test("boats float at the highest water surface instead of sinking to terrain", () => {
+        let chunks = setBlock(new Map(), [0, 3, 0], "water");
+        chunks = setBlock(chunks, [0, 4, 0], "water");
+        const boat = {
+            ...creature, id: "boat:test", type: "boat", health: 16,
+            position: [0, 1.5, 0], friendLevel: 1,
+        };
+        const result = updateCreature(boat, {seed: "friends", chunks, playerPosition: [0, 2, 1]}, 2000, 1);
+        expect(result.position).toEqual([0, 4.5, 0]);
+        expect(result.velocity).toEqual([0, 0, 0]);
     });
 });

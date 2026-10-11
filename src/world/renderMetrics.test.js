@@ -28,4 +28,14 @@ describe("rendering metrics", () => {
         unregisterChunkMetrics("0,0,0");
         unregisterModelMetrics("chair");
     });
+
+    test("uses the Extra distance performance budget at distance six", () => {
+        const renderer = {info: {render: {calls: 0, triangles: 0}, memory: {geometries: 0, textures: 0}}};
+        expect(renderingMetrics(renderer, [16], 6).budgetDistance).toBe(6);
+    });
+
+    test("uses the Extra 2x performance budget at distance nine", () => {
+        const renderer = {info: {render: {calls: 0, triangles: 0}, memory: {geometries: 0, textures: 0}}};
+        expect(renderingMetrics(renderer, [16], 9).budgetDistance).toBe(9);
+    });
 });

@@ -8,7 +8,8 @@ export const FPV = () => {
     const mapOpen = useStore((state) => state.mapOpen);
     const worldManagerOpen = useStore((state) => state.worldManagerOpen);
     const packsOpen = useStore((state) => state.packsOpen);
+    const villagerPanelId = useStore((state) => state.villagerPanelId);
 
-    if (inventoryOpen || mapOpen || worldManagerOpen || packsOpen) return null;
+    if (inventoryOpen || mapOpen || worldManagerOpen || packsOpen || villagerPanelId) return null;
     return (<PointerLockControls args={[camera, gl.domElement]} /> )
 }

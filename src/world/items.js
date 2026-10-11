@@ -29,6 +29,15 @@ const CREATURE_ITEMS = [
     {id: "spawn_sheep", name: "Sheep Friend", maxStack: 64, creatureType: "sheep", uiColor: "#eee9df"},
     {id: "spawn_rabbit", name: "Rabbit Friend", maxStack: 64, creatureType: "rabbit", uiColor: "#b88455"},
     {id: "spawn_glow_sprite", name: "Glow Sprite Friend", maxStack: 64, creatureType: "glow_sprite", uiColor: "#ffe66d"},
+    {id: "spawn_fish_blue", name: "Blue Reef Fish", maxStack: 64, creatureType: "fish_blue", uiColor: "#4597da"},
+    {id: "spawn_fish_orange", name: "Sunset Fish", maxStack: 64, creatureType: "fish_orange", uiColor: "#f28a32"},
+    {id: "spawn_fish_pink", name: "Rose Fish", maxStack: 64, creatureType: "fish_pink", uiColor: "#e76e9d"},
+].map((item) => ({...item, artwork: itemArtwork(item.id)}));
+
+const TRANSPORT_ITEMS = [
+    {id: "spawn_horse", name: "Friendly Horse", maxStack: 64, vehicleType: "horse", uiColor: "#845337"},
+    {id: "spawn_boat", name: "Wooden Boat", maxStack: 64, vehicleType: "boat", uiColor: "#a66b35"},
+    {id: "spawn_minecart", name: "Minecart", maxStack: 64, vehicleType: "minecart", uiColor: "#8b9298"},
 ].map((item) => ({...item, artwork: itemArtwork(item.id)}));
 
 const TOOL_ITEMS = [
@@ -41,7 +50,7 @@ const TOOL_ITEMS = [
     {id: "wooden_hoe", name: "Wooden Hoe", toolType: "hoe", tier: 1, speed: 1, maxDurability: 40, uiColor: "#a97742"},
 ].map((item) => ({...item, maxStack: 1, artwork: itemArtwork(item.id)}));
 
-export const ITEMS = [...BLOCK_ITEMS, ...MATERIAL_ITEMS, ...TOOL_ITEMS, ...CREATURE_ITEMS];
+export const ITEMS = [...BLOCK_ITEMS, ...MATERIAL_ITEMS, ...TOOL_ITEMS, ...CREATURE_ITEMS, ...TRANSPORT_ITEMS];
 
 export const ITEM_BY_ID = Object.fromEntries(ITEMS.map((item) => [item.id, item]));
 
@@ -49,14 +58,15 @@ export function isItemId(value) {
     return Object.prototype.hasOwnProperty.call(ITEM_BY_ID, value);
 }
 
-const UTILITY_BLOCKS = new Set(["crafting_table", "furnace", "chest", "door", "trapdoor", "ladder", "bed", "torch", "lantern", "switch", "lamp", "farmland", "portal", "enchanting_table"]);
+const UTILITY_BLOCKS = new Set(["crafting_table", "furnace", "chest", "door", "trapdoor", "ladder", "bed", "torch", "lantern", "switch", "lamp", "farmland", "portal", "enchanting_table", "elevator"]);
 const FLUID_BLOCKS = new Set(["water", "lava"]);
 const NATURE_BLOCKS = new Set(["grass", "dirt", "sand", "gravel", "snow", "ice", "log", "pale_log", "leaves", "tall_grass", "flower", "cactus", "coal_ore", "iron_ore", "copper_ore", "gold_ore", "crystal_ore"]);
 
-export const ITEM_CATEGORY_ORDER = ["blocks", "windows", "doors", "utility", "nature", "fluids", "furniture", "decor", "outdoor", "materials", "tools", "creatures"];
-export const ITEM_CATEGORY_NAMES = {blocks: "Blocks", windows: "Windows", doors: "Doors", utility: "Utility", nature: "Nature", fluids: "Fluids", furniture: "Furniture", decor: "Decor", outdoor: "Outdoor", materials: "Materials", tools: "Tools", creatures: "Creatures"};
+export const ITEM_CATEGORY_ORDER = ["blocks", "windows", "doors", "utility", "nature", "fluids", "furniture", "decor", "outdoor", "materials", "tools", "creatures", "transport"];
+export const ITEM_CATEGORY_NAMES = {blocks: "Blocks", windows: "Windows", doors: "Doors", utility: "Utility", nature: "Nature", fluids: "Fluids", furniture: "Furniture", decor: "Decor", outdoor: "Outdoor", materials: "Materials", tools: "Tools", creatures: "Creatures", transport: "Transport"};
 
 export function itemCategory(item) {
+    if (item.vehicleType) return "transport";
     if (item.creatureType) return "creatures";
     if (item.toolType) return "tools";
     if (!item.blockId) return "materials";

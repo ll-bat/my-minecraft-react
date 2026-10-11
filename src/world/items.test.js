@@ -4,7 +4,10 @@ describe("creative item categories", () => {
     test("separates utility blocks, tools, and friendly creatures", () => {
         expect(itemCategory({blockId: "bed"})).toBe("utility");
         expect(itemsInCategory("tools").some((item) => item.id === "wooden_pickaxe")).toBe(true);
-        expect(itemsInCategory("creatures").map((item) => item.creatureType)).toEqual(["sheep", "rabbit", "glow_sprite"]);
+        expect(itemsInCategory("creatures").map((item) => item.creatureType)).toEqual([
+            "sheep", "rabbit", "glow_sprite", "fish_blue", "fish_orange", "fish_pink",
+        ]);
+        expect(itemsInCategory("transport").map((item) => item.vehicleType)).toEqual(["horse", "boat", "minecart"]);
         expect(itemsInCategory("windows").map((item) => item.id)).toEqual(["window"]);
         expect(itemsInCategory("doors").map((item) => item.id)).toEqual(["door"]);
         expect(itemsInCategory("blocks").some((item) => item.id === "red_brick")).toBe(true);
@@ -17,7 +20,7 @@ describe("creative item categories", () => {
 
 
     test("non-block items have matching atlas artwork", () => {
-        ["stick", "coal", "iron_ingot", "crystal", "wooden_pickaxe", "stone_axe", "seeds", "wheat", "spawn_sheep"].forEach((id) => {
+        ["stick", "coal", "iron_ingot", "crystal", "wooden_pickaxe", "stone_axe", "seeds", "wheat", "spawn_sheep", "spawn_fish_blue", "spawn_fish_orange", "spawn_fish_pink"].forEach((id) => {
             expect(ITEM_BY_ID[id].artwork).toMatchObject({size: 128});
             expect(ITEM_BY_ID[id].artwork.atlasSize).toHaveLength(2);
         });

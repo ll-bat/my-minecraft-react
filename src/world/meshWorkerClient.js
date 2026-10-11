@@ -3,6 +3,7 @@ let nextRequestId = 1;
 const pending = new Map();
 const completed = [];
 let deliveryScheduled = false;
+let definitionsSent = false;
 
 function deliverNextMesh() {
     deliveryScheduled = false;
@@ -36,6 +37,7 @@ function meshWorker() {
         pending.clear();
         worker?.terminate();
         worker = null;
+        definitionsSent = false;
     });
     return worker;
 }
@@ -45,6 +47,10 @@ export function buildChunkMeshInWorker(request) {
         const id = nextRequestId;
         nextRequestId += 1;
         pending.set(id, {resolve, reject});
-        meshWorker().postMessage({...request, id});
+        const payload = definitionsSent
+            ? {...request, blockDefinitions: undefined, id}
+            : {...request, id};
+        definitionsSent = true;
+        meshWorker().postMessage(payload);
     });
 }

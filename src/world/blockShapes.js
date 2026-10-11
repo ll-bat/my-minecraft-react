@@ -1,6 +1,6 @@
 const PARTIAL_SHAPES = new Set([
     "bed", "beam", "door", "farmland", "fence", "ladder", "lantern", "model", "post",
-    "railing", "slab", "stairs", "torch", "trapdoor", "wall",
+    "railing", "slab", "stairs", "torch", "track", "elevator", "trapdoor", "wall",
 ]);
 
 const CONNECTIONS = [
@@ -69,6 +69,13 @@ export function shapeParts(definition, state = {}, neighborAt = () => null) {
         case "slab": return [state.half === "upper"
             ? [-0.5, 0.5, 0, 0.5, -0.5, 0.5]
             : [-0.5, 0.5, -0.5, 0, -0.5, 0.5]];
+        case "elevator": return [[-0.5, 0.5, 0.32, 0.5, -0.5, 0.5]];
+        case "track": return [
+            rotateBounds([-0.4, -0.28, -0.48, -0.39, -0.5, 0.5], facing),
+            rotateBounds([0.28, 0.4, -0.48, -0.39, -0.5, 0.5], facing),
+            rotateBounds([-0.5, 0.5, -0.5, -0.43, -0.4, -0.3], facing),
+            rotateBounds([-0.5, 0.5, -0.5, -0.43, 0.3, 0.4], facing),
+        ];
         case "stairs": {
             const upper = state.half === "upper";
             const parts = upper

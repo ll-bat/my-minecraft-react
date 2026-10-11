@@ -8,6 +8,8 @@ const MAX_SAMPLES = 120;
 export const PERFORMANCE_BUDGETS = {
     2: {frameMs: 20, drawCalls: 180, triangles: 800000, gpuMb: 192, workerMeshMs: 35, meshInstallMs: 7},
     4: {frameMs: 24, drawCalls: 360, triangles: 1800000, gpuMb: 320, workerMeshMs: 50, meshInstallMs: 10},
+    6: {frameMs: 30, drawCalls: 600, triangles: 3200000, gpuMb: 512, workerMeshMs: 70, meshInstallMs: 14},
+    9: {frameMs: 36, drawCalls: 900, triangles: 5000000, gpuMb: 768, workerMeshMs: 90, meshInstallMs: 18},
 };
 
 export const RENDER_LAYER_TRIANGLE_BUDGETS = {
@@ -78,7 +80,7 @@ export function renderingMetrics(renderer, frameSamples, renderDistance) {
         objects[batch.category] = (objects[batch.category] ?? 0) + batch.triangles;
     });
     const frameMs = frameSamples.length ? frameSamples.reduce((sum, value) => sum + value, 0) / frameSamples.length : 0;
-    const targetDistance = renderDistance >= 3 ? 4 : 2;
+    const targetDistance = renderDistance >= 8 ? 9 : renderDistance >= 5 ? 6 : renderDistance >= 3 ? 4 : 2;
     const target = PERFORMANCE_BUDGETS[targetDistance];
     const gpuMb = bufferBytes / (1024 * 1024);
     const values = {
@@ -103,7 +105,7 @@ export function renderingMetrics(renderer, frameSamples, renderDistance) {
         objectsWithinBudget: Object.fromEntries(Object.entries(OBJECT_TRIANGLE_BUDGETS)
             .map(([category, budget]) => [category, (objects[category] ?? 0) <= budget])),
     };
-    if (renderDistance === 2 || renderDistance === 4) {
+    if (renderDistance === 2 || renderDistance === 4 || renderDistance === 6 || renderDistance === 9) {
         distanceProfiles[renderDistance] = {
             frameMs: result.frameMs,
             frameP95Ms: result.frameP95Ms,

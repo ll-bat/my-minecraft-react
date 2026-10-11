@@ -662,6 +662,30 @@
       "source": "project-generated"
     },
     {
+      "author": "Kenney",
+      "id": "spawn_fish_blue",
+      "license": "CC0-1.0",
+      "modification": "copied and packed into shared item atlas",
+      "output": "src/images/game/items/spawn_fish_blue.png",
+      "source": "src/images/assets/kenney-fish-pack/fish_blue.png"
+    },
+    {
+      "author": "Kenney",
+      "id": "spawn_fish_orange",
+      "license": "CC0-1.0",
+      "modification": "copied and packed into shared item atlas",
+      "output": "src/images/game/items/spawn_fish_orange.png",
+      "source": "src/images/assets/kenney-fish-pack/fish_orange.png"
+    },
+    {
+      "author": "Kenney",
+      "id": "spawn_fish_pink",
+      "license": "CC0-1.0",
+      "modification": "copied and packed into shared item atlas",
+      "output": "src/images/game/items/spawn_fish_pink.png",
+      "source": "src/images/assets/kenney-fish-pack/fish_pink.png"
+    },
+    {
       "id": "model_barrel",
       "modification": "rendered from project glTF cuboids",
       "output": "src/images/game/items/model_barrel.png",

@@ -1,8 +1,10 @@
 jest.mock("nanoid", () => ({nanoid: () => "test-id"}));
 
-import {RENDER_DISTANCE, renderColumnOffsets, useStore, WORLD_STORAGE_KEY} from "./useStore";
+import {MAX_RENDER_DISTANCE, RENDER_DISTANCE, renderColumnOffsets, useStore, WORLD_STORAGE_KEY} from "./useStore";
 import {getBlock, setBlock} from "../world/chunks";
 import {emptyInventory} from "../world/inventory";
+import {cityForColumn} from "../world/structures";
+import {generateChunkColumn} from "../world/terrain";
 
 describe("world store", () => {
     beforeEach(() => {
@@ -30,6 +32,9 @@ describe("world store", () => {
             entities: [],
             spawnedCreatureGroups: new Set(),
             creatureFeedback: "",
+            villagerPanelId: null,
+            mountedEntityId: null,
+            teleportRequest: null,
             dimension: "overworld",
             dimensionSnapshots: new Map(),
             exploredColumns: new Set(),
@@ -85,6 +90,30 @@ describe("world store", () => {
         expect(useStore.getState().activeChunkKeys.length).toBeGreaterThan(0);
     });
 
+    test("upgrades an already generated column when it belongs to the unique city", async () => {
+        const seed = "existing-city-upgrade";
+        let city = null;
+        for (let x = -8; x <= 8 && !city; x += 1) for (let z = -8; z <= 8; z += 1) {
+            const candidate = cityForColumn(seed, x, z);
+            if (candidate?.districtX === 0 && candidate?.districtZ === 0) { city = candidate; break; }
+        }
+        const key = `${city.chunkX},${city.chunkZ}`;
+        useStore.setState({
+            seed,
+            chunks: generateChunkColumn(seed, city.chunkX, city.chunkZ),
+            generatedColumns: new Set([key]),
+            spawnedCreatureGroups: new Set(),
+            discoveredStructures: [],
+            entities: [],
+        });
+        await useStore.getState().ensureColumns(city.chunkX, city.chunkZ, 0);
+        const ids = Array.from(useStore.getState().chunks.values()).flatMap((chunk) => Array.from(chunk.values()));
+        expect(ids).toContain("water");
+        expect(ids).toContain("sign");
+        expect(useStore.getState().spawnedCreatureGroups.has(`${city.id}:0,0:built`)).toBe(true);
+        expect(useStore.getState().discoveredStructures.filter((structure) => structure.id === city.id)).toHaveLength(1);
+    });
+
     test("keeps the previous view active while the next chunk column streams", async () => {
         await useStore.getState().ensureColumns(0, 0, 0);
         const loading = useStore.getState().ensureColumns(1, 0, 0);
@@ -101,11 +130,21 @@ describe("world store", () => {
         expect(renderColumnOffsets(RENDER_DISTANCE)).not.toContainEqual([5, 0]);
     });
 
-    test("accepts render distances one through four", () => {
-        expect(useStore.getState().setRenderDistance(4)).toBe(true);
-        expect(useStore.getState().renderDistance).toBe(4);
-        expect(useStore.getState().setRenderDistance(5)).toBe(false);
-        expect(useStore.getState().renderDistance).toBe(4);
+    test("keeps Ultra as default and accepts both Extra render distances", () => {
+        expect(RENDER_DISTANCE).toBe(4);
+        expect(MAX_RENDER_DISTANCE).toBe(9);
+        expect(useStore.getState().setRenderDistance(6)).toBe(true);
+        expect(useStore.getState().renderDistance).toBe(6);
+        expect(renderColumnOffsets(6)).toHaveLength(137);
+        expect(renderColumnOffsets(6)).toContainEqual([6, 0]);
+        expect(renderColumnOffsets(6)).not.toContainEqual([6, 6]);
+        expect(useStore.getState().setRenderDistance(9)).toBe(true);
+        expect(useStore.getState().renderDistance).toBe(9);
+        expect(renderColumnOffsets(9)).toHaveLength(277);
+        expect(renderColumnOffsets(9)).toContainEqual([9, 0]);
+        expect(renderColumnOffsets(9)).not.toContainEqual([9, 9]);
+        expect(useStore.getState().setRenderDistance(10)).toBe(false);
+        expect(useStore.getState().renderDistance).toBe(9);
     });
 
     test("keeps a placed water cube static", () => {
@@ -148,6 +187,53 @@ describe("world store", () => {
         expect(useStore.getState().applySelectedItemToBlock([0, 1, 0], [0, 2, 0])).toBe(true);
         expect(useStore.getState().entities[0].type).toBe("rabbit");
         expect(useStore.getState().entities[0].persistent).toBe(true);
+    });
+
+    test("releases a selected fish into the exact water block", () => {
+        const inventory = emptyInventory();
+        inventory[0] = {itemId: "spawn_fish_orange", count: 64};
+        useStore.setState({inventory, survivalInventory: inventory, selectedHotbar: 0, chunks: setBlock(new Map(), [3, 5, 4], "water"), entities: []});
+        expect(useStore.getState().applySelectedItemToBlock([3, 5, 4], [3, 6, 4])).toBe(true);
+        expect(useStore.getState().entities[0]).toMatchObject({type: "fish_orange", position: [3, 5, 4], persistent: true});
+    });
+
+    test("places and mounts transport from the catalog", () => {
+        const inventory = emptyInventory();
+        inventory[0] = {itemId: "spawn_horse", count: 64};
+        useStore.setState({inventory, survivalInventory: inventory, selectedHotbar: 0, chunks: setBlock(new Map(), [0, 1, 0], "grass"), entities: [], playerPosition: [0, 2, 1]});
+        expect(useStore.getState().applySelectedItemToBlock([0, 1, 0], [0, 2, 0])).toBe(true);
+        const horse = useStore.getState().entities[0];
+        expect(horse.type).toBe("horse");
+        expect(useStore.getState().interactCreature(horse.id)).toBe(true);
+        expect(useStore.getState().mountedEntityId).toBe(horse.id);
+        useStore.getState().dismount();
+        expect(useStore.getState().mountedEntityId).toBeNull();
+    });
+
+    test("opens villager dialogue and completes a friendly trade", () => {
+        const inventory = emptyInventory();
+        inventory[0] = {itemId: "wheat", count: 4};
+        const villager = {
+            id: "villager:test", type: "villager", name: "Mira", profession: "farmer", position: [0, 2, 1],
+            velocity: [0, 0, 0], health: 20, animationState: "idle", heading: 0, friendLevel: 0,
+            followUntil: 0, lastInteraction: 0, lastGift: 0, persistent: true, home: [0, 0], chunk: [0, 0],
+            task: {itemId: "seeds", count: 4, rewardItem: "wheat", rewardCount: 6, complete: false},
+            trade: {costItem: "wheat", costCount: 4, rewardItem: "flower", rewardCount: 2},
+        };
+        useStore.setState({inventory, survivalInventory: inventory, entities: [villager], playerPosition: [0, 2, 0]});
+        expect(useStore.getState().interactCreature(villager.id)).toBe(true);
+        expect(useStore.getState().villagerPanelId).toBe(villager.id);
+        expect(useStore.getState().tradeWithVillager()).toBe(true);
+        expect(useStore.getState().inventory.some((stack) => stack?.itemId === "flower" && stack.count === 2)).toBe(true);
+        expect(useStore.getState().entities[0].friendLevel).toBe(1);
+    });
+
+    test("moves between vertically aligned elevator platforms", () => {
+        let chunks = setBlock(new Map(), [2, 2, 3], "elevator");
+        chunks = setBlock(chunks, [2, 8, 3], "elevator");
+        useStore.setState({chunks});
+        expect(useStore.getState().interactBlock([2, 2, 3])).toBe(true);
+        expect(useStore.getState().teleportRequest.position).toEqual([2, 9.05, 3]);
     });
 
     test("collects a nearby drop into inventory", () => {

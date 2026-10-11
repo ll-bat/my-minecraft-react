@@ -85,7 +85,7 @@ World architecture should be improved before terrain, water, or large maps are a
 
 ## Phase 3: Generate an explorable overworld
 
-**Status: Complete.** Seeded terrain, layers, caves, ore veins, trees, vegetation, four biomes, environment changes, world bounds, safe spawning, and fall recovery are implemented.
+**Status: Complete.** Seeded terrain, layers, caves, ore veins, trees, vegetation, four biomes, terraced forest and mountain highlands capped at height 50, environment changes, world bounds, safe spawning, and fall recovery are implemented.
 
 1. **Add seeded terrain generation**
    - Let the player create a world from a numeric or text seed.

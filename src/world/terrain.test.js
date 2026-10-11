@@ -1,4 +1,4 @@
-import {BIOMES, biomeAt, generateChunkColumn, hasLakeWater, SEA_LEVEL, spawnPosition, surfaceHeight, WORLD_MIN_Y} from "./terrain";
+import {BIOMES, biomeAt, elevatedTerrainAt, generateChunkColumn, hasLakeWater, SEA_LEVEL, spawnPosition, surfaceHeight, WORLD_MIN_Y} from "./terrain";
 import {getBlock} from "./chunks";
 
 describe("seeded terrain", () => {
@@ -31,6 +31,41 @@ describe("seeded terrain", () => {
         expect(getBlock(chunks, [3, WORLD_MIN_Y, 4])).toBe("bedrock");
         expect(getBlock(chunks, [3, height, 4])).not.toBeNull();
         expect(getBlock(chunks, [3, height + 10, 4])).toBeNull();
+    });
+
+    test("creates terraced forest and mountain highlands capped at height fifty", () => {
+        const seed = "terraced-highlands";
+        const examples = new Map();
+        for (let x = -720; x <= 720; x += 32) {
+            for (let z = -720; z <= 720; z += 32) {
+                const elevated = elevatedTerrainAt(seed, x, z);
+                if (elevated && !examples.has(elevated.biome)) examples.set(elevated.biome, elevated);
+            }
+        }
+
+        expect(examples.has(BIOMES.FOREST)).toBe(true);
+        expect(examples.has(BIOMES.MOUNTAINS)).toBe(true);
+        examples.forEach((elevated) => {
+            const centerX = Math.round(elevated.centerX);
+            const centerZ = Math.round(elevated.centerZ);
+            expect(surfaceHeight(seed, centerX, centerZ)).toBeGreaterThanOrEqual(40);
+            expect(surfaceHeight(seed, centerX, centerZ)).toBeLessThanOrEqual(50);
+            expect(biomeAt(seed, centerX, centerZ)).toBe(elevated.biome);
+
+            let comparedSteps = 0;
+            for (let distance = 0; distance < Math.floor(elevated.radius * 0.75); distance += 1) {
+                const current = elevatedTerrainAt(seed, Math.round(elevated.centerX + distance), centerZ);
+                const outward = elevatedTerrainAt(seed, Math.round(elevated.centerX + distance + 1), centerZ);
+                if (current?.centerX !== elevated.centerX || current?.centerZ !== elevated.centerZ
+                    || outward?.centerX !== elevated.centerX || outward?.centerZ !== elevated.centerZ) continue;
+                expect(Math.abs(current.rise - outward.rise)).toBeLessThanOrEqual(1);
+                const currentHeight = surfaceHeight(seed, Math.round(elevated.centerX + distance), centerZ);
+                const outwardHeight = surfaceHeight(seed, Math.round(elevated.centerX + distance + 1), centerZ);
+                expect(Math.abs(currentHeight - outwardHeight)).toBeLessThanOrEqual(1);
+                comparedSteps += 1;
+            }
+            expect(comparedSteps).toBeGreaterThan(20);
+        });
     });
 
     test("finds a spawn position above the terrain", () => {

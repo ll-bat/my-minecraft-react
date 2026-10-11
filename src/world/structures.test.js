@@ -1,4 +1,4 @@
-import {addStructure, structureForColumn} from "./structures";
+import {addStructure, cityForColumn, structureForColumn} from "./structures";
 import {generateChunkColumn} from "./terrain";
 import {parseChunkKey} from "./chunks";
 
@@ -92,6 +92,44 @@ describe("seeded structures", () => {
             .forEach((id) => expect(ids).toContain(id));
         expect(ids.filter((id) => id === "window").length).toBeGreaterThan(100);
         expect(ids.filter((id) => id === "wood_railing").length).toBeGreaterThan(50);
+        expect(ids.filter((id) => id === "elevator").length).toBe(5);
+    });
+
+    test("builds peaceful villages with homes, crops, a market, and rail stop", () => {
+        const village = findStructure("community-test", "village");
+        expect(village).not.toBeNull();
+        const ids = generatedIds("community-test", village);
+        ["door", "window", "bed", "crop_3", "chest", "crate", "track"].forEach((id) => expect(ids).toContain(id));
+    });
+
+    test("creates exactly one connected nine-district city per world", () => {
+        const districts = [];
+        for (let chunkX = -12; chunkX <= 12; chunkX += 1) for (let chunkZ = -12; chunkZ <= 12; chunkZ += 1) {
+            const city = cityForColumn("one-small-city", chunkX, chunkZ);
+            if (city) districts.push(city);
+        }
+        expect(districts).toHaveLength(9);
+        expect(new Set(districts.map((city) => city.id)).size).toBe(1);
+        expect(new Set(districts.map((city) => `${city.districtX},${city.districtZ}`)).size).toBe(9);
+        expect(Math.hypot(districts[0].cityCenterChunkX, districts[0].cityCenterChunkZ)).toBeLessThanOrEqual(6);
+    });
+
+    test("builds city roads, residences, civic plaza, park, and market from current blocks", () => {
+        const districts = [];
+        for (let chunkX = -8; chunkX <= 8; chunkX += 1) for (let chunkZ = -8; chunkZ <= 8; chunkZ += 1) {
+            const city = cityForColumn("city-build", chunkX, chunkZ);
+            if (city) districts.push(city);
+        }
+        const allIds = districts.flatMap((district) => generatedIds("city-build", district));
+        ["gray_brick", "polished_stone", "door", "window", "bed", "wood_table", "lantern", "elevator", "water", "bench", "bush", "crate", "barrel", "sign", "path_marker"]
+            .forEach((id) => expect(allIds).toContain(id));
+        districts.forEach((district) => {
+            const chunks = generatedStructure("city-build", district);
+            Array.from(chunks.keys()).forEach((key) => {
+                const [chunkX, , chunkZ] = parseChunkKey(key);
+                expect([chunkX, chunkZ]).toEqual([district.chunkX, district.chunkZ]);
+            });
+        });
     });
 
     test("keeps large landmarks inside their source column for safe streaming", () => {
@@ -104,5 +142,16 @@ describe("seeded structures", () => {
                     expect([chunkX, chunkZ]).toEqual([structure.chunkX, structure.chunkZ]);
                 });
             });
+    });
+
+    test("clones only the structure column when upgrading an explored world", () => {
+        const target = new Map([[0, "stone"]]);
+        const unrelated = new Map([[0, "grass"]]);
+        const chunks = new Map([["3,0,3", target], ["20,0,20", unrelated]]);
+        const upgraded = addStructure(chunks, "structures", {id: "well", type: "well", chunkX: 3, chunkZ: 3});
+
+        expect(upgraded.get("20,0,20")).toBe(unrelated);
+        expect(upgraded.get("3,0,3")).not.toBe(target);
+        expect(chunks.get("3,0,3")).toBe(target);
     });
 });

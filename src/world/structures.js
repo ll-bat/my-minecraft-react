@@ -1,9 +1,11 @@
 import {randomAt, seedToNumber} from "./noise";
 import {CHUNK_SIZE, chunkKey, localIndex} from "./chunks";
-import {BIOMES, biomeAt, hasLakeWater, surfaceHeight} from "./terrain";
+import {BIOMES, biomeAt, hasLakeWater, surfaceHeight, WORLD_MAX_Y} from "./terrain";
 
 const HOUSE_CELL_SIZE = 4;
 const LANDMARK_CELL_SIZE = 7;
+const CITY_RADIUS = 1;
+const cityPlanCache = new Map();
 
 function mutableSetBlock(chunks, [x, y, z], blockId) {
     const chunkX = Math.floor(x / CHUNK_SIZE);
@@ -39,6 +41,64 @@ function siteForStructure(seed, centerX, centerZ, bounds, maximumSlope) {
     return baseY - minimum <= maximumSlope ? {baseY, footprint} : null;
 }
 
+function cityPlan(seed) {
+    if (cityPlanCache.has(seed)) return cityPlanCache.get(seed);
+    const numericSeed = seedToNumber(`${seed}:only-city`);
+    let best = null;
+    for (let candidate = 0; candidate < 16; candidate += 1) {
+        const angle = randomAt(numericSeed + 101, candidate, 0, 0) * Math.PI * 2;
+        const radius = 4 + Math.floor(randomAt(numericSeed + 211, candidate, 0, 0) * 2);
+        const chunkX = Math.round(Math.cos(angle) * radius);
+        const chunkZ = Math.round(Math.sin(angle) * radius);
+        const heights = [];
+        let wet = 0;
+        let mountains = 0;
+        for (let dx = -20; dx <= 20; dx += 4) for (let dz = -20; dz <= 20; dz += 4) {
+            const x = chunkX * CHUNK_SIZE + 8 + dx;
+            const z = chunkZ * CHUNK_SIZE + 8 + dz;
+            const surface = surfaceHeight(seed, x, z);
+            heights.push(surface);
+            if (hasLakeWater(seed, x, z, surface)) wet += 1;
+            if (biomeAt(seed, x, z) === BIOMES.MOUNTAINS) mountains += 1;
+        }
+        const sorted = heights.sort((left, right) => left - right);
+        const baseY = sorted[Math.floor(sorted.length / 2)];
+        const range = sorted[sorted.length - 1] - sorted[0];
+        const score = range * 12 + wet * 5 + mountains * 3 + randomAt(numericSeed + 307, candidate, 0, 0);
+        if (!best || score < best.score) best = {chunkX, chunkZ, baseY, score};
+    }
+    const plan = {...best, id: `overworld:city:${best.chunkX},${best.chunkZ}`};
+    cityPlanCache.set(seed, plan);
+    return plan;
+}
+
+export function cityForColumn(seed, chunkX, chunkZ) {
+    const plan = cityPlan(seed);
+    const districtX = chunkX - plan.chunkX;
+    const districtZ = chunkZ - plan.chunkZ;
+    if (Math.abs(districtX) > CITY_RADIUS || Math.abs(districtZ) > CITY_RADIUS) return null;
+    const biome = biomeAt(seed, plan.chunkX * CHUNK_SIZE + 8, plan.chunkZ * CHUNK_SIZE + 8);
+    const stylePrefix = biome === BIOMES.DESERT ? "sunstone" : biome === BIOMES.FOREST ? "woodland" : biome === BIOMES.MOUNTAINS ? "alpine" : "garden";
+    return {
+        id: plan.id,
+        type: "city",
+        style: `${stylePrefix}_city`,
+        biome,
+        chunkX,
+        chunkZ,
+        cityCenterChunkX: plan.chunkX,
+        cityCenterChunkZ: plan.chunkZ,
+        districtX,
+        districtZ,
+        baseY: plan.baseY,
+    };
+}
+
+export function cityCenter(seed) {
+    const plan = cityPlan(seed);
+    return [plan.chunkX * CHUNK_SIZE + 8, plan.baseY + 1, plan.chunkZ * CHUNK_SIZE + 8];
+}
+
 function landmarkForColumn(seed, chunkX, chunkZ) {
     const seedNumber = seedToNumber(`${seed}:landmarks`);
     const cellX = Math.floor(chunkX / LANDMARK_CELL_SIZE);
@@ -51,11 +111,14 @@ function landmarkForColumn(seed, chunkX, chunkZ) {
     if (candidateX !== chunkX || candidateZ !== chunkZ) return null;
     const centerX = chunkX * CHUNK_SIZE + 8;
     const centerZ = chunkZ * CHUNK_SIZE + 8;
-    const type = randomAt(seedNumber + 709, cellX, 0, cellZ) < 0.45 ? "hotel" : "building";
+    const typeRoll = randomAt(seedNumber + 709, cellX, 0, cellZ);
+    const type = typeRoll < 0.28 ? "village" : typeRoll < 0.58 ? "hotel" : "building";
     const bounds = type === "hotel"
         ? {minX: -7, maxX: 7, minZ: -6, maxZ: 6}
         : {minX: -7, maxX: 7, minZ: -7, maxZ: 7};
-    if (!siteForStructure(seed, centerX, centerZ, bounds, type === "hotel" ? 2 : 3)) return null;
+    const site = siteForStructure(seed, centerX, centerZ, bounds, type === "hotel" ? 2 : 3);
+    const requiredHeadroom = type === "village" ? 8 : type === "hotel" ? 19 : 23;
+    if (!site || site.baseY + requiredHeadroom > WORLD_MAX_Y) return null;
     const biome = biomeAt(seed, centerX, centerZ);
     const stylePrefix = {
         [BIOMES.PLAINS]: "garden",
@@ -100,6 +163,8 @@ function houseForColumn(seed, chunkX, chunkZ) {
 export function structureForColumn(seed, chunkX, chunkZ, dimension = "overworld") {
     if (Math.abs(chunkX) <= 1 && Math.abs(chunkZ) <= 1) return null;
     if (dimension === "overworld") {
+        const city = cityForColumn(seed, chunkX, chunkZ);
+        if (city) return city;
         const landmark = landmarkForColumn(seed, chunkX, chunkZ);
         if (landmark) return {id: `${dimension}:${chunkX},${chunkZ}`, ...landmark, chunkX, chunkZ};
         const house = houseForColumn(seed, chunkX, chunkZ);
@@ -219,7 +284,7 @@ function landmarkPalette(style) {
 
 function prepareLandmarkSite(chunks, terrainSeed, centerX, centerZ, bounds, maximumSlope, topY, foundation) {
     const site = siteForStructure(terrainSeed, centerX, centerZ, bounds, maximumSlope);
-    if (!site) return null;
+    if (!site || site.baseY + topY > WORLD_MAX_Y) return null;
     site.footprint.forEach(({x, z, surface}) => {
         for (let y = site.baseY + 1; y <= site.baseY + topY; y += 1) mutableSetBlock(chunks, [x, y, z], null);
         for (let y = surface + 1; y <= site.baseY; y += 1) mutableSetBlock(chunks, [x, y, z], foundation);
@@ -278,6 +343,7 @@ function addHotel(chunks, seed, structure, centerX, centerZ) {
         mutableSetBlock(chunks, [centerX - 3, floorY + 1, centerZ + 1], "chair");
         mutableSetBlock(chunks, [centerX - 1, floorY + 1, centerZ + 3], floor === 0 ? "cabinet" : "shelf");
         mutableSetBlock(chunks, [centerX - 3, floorY + 3, centerZ], "lantern");
+        mutableSetBlock(chunks, [centerX, floorY, centerZ - 3], "elevator");
     }
 
     const roofY = baseY + floors * floorHeight;
@@ -369,6 +435,7 @@ function addBuilding(chunks, seed, structure, centerX, centerZ) {
         mutableSetBlock(chunks, [centerX - 3, floorY + 1, centerZ + 2], floor % 2 ? "cabinet" : "shelf");
         mutableSetBlock(chunks, [centerX, floorY + 1, centerZ + 1], "rug");
         mutableSetBlock(chunks, [centerX, floorY + 3, centerZ], "lantern");
+        mutableSetBlock(chunks, [centerX + 3, floorY, centerZ - 3], "elevator");
     }
 
     const roofY = baseY + floors * floorHeight;
@@ -392,9 +459,186 @@ function addBuilding(chunks, seed, structure, centerX, centerZ) {
     return true;
 }
 
+function addVillage(chunks, seed, structure, centerX, centerZ) {
+    const terrainSeed = structure.dimensionSeed ?? seed;
+    const palette = landmarkPalette(structure.style);
+    const site = prepareLandmarkSite(chunks, terrainSeed, centerX, centerZ, {minX: -7, maxX: 7, minZ: -7, maxZ: 7}, 3, 8, palette.foundation);
+    if (!site) return false;
+    const baseY = site.baseY;
+
+    // A central square links three compact homes, a market stall, garden, and rail stop.
+    for (let dx = -7; dx <= 7; dx += 1) {
+        mutableSetBlock(chunks, [centerX + dx, baseY, centerZ], "stone_slab");
+        mutableSetBlock(chunks, [centerX + dx, baseY + 1, centerZ], "track");
+    }
+    for (let dz = -7; dz <= 7; dz += 1) mutableSetBlock(chunks, [centerX, baseY, centerZ + dz], "stone_slab");
+
+    const homes = [[-4, -4], [4, -4], [0, 4]];
+    homes.forEach(([homeX, homeZ]) => {
+        for (let dx = -2; dx <= 2; dx += 1) for (let dz = -2; dz <= 2; dz += 1) {
+            mutableSetBlock(chunks, [centerX + homeX + dx, baseY, centerZ + homeZ + dz], palette.floor);
+            for (let dy = 1; dy <= 3; dy += 1) {
+                if (Math.abs(dx) !== 2 && Math.abs(dz) !== 2) continue;
+                const facesSquare = homeZ < 0 ? dz === 2 : dz === -2;
+                if (facesSquare && dx === 0 && dy <= 2) continue;
+                const corner = Math.abs(dx) === 2 && Math.abs(dz) === 2;
+                const window = dy === 2 && !corner && (dx === 0 || dz === 0);
+                mutableSetBlock(chunks, [centerX + homeX + dx, baseY + dy, centerZ + homeZ + dz], corner ? palette.frame : window ? "window" : palette.wall);
+            }
+            mutableSetBlock(chunks, [centerX + homeX + dx, baseY + 4, centerZ + homeZ + dz], palette.roof);
+        }
+        const doorZ = centerZ + homeZ + (homeZ < 0 ? 2 : -2);
+        mutableSetBlock(chunks, [centerX + homeX, baseY + 1, doorZ], "door");
+        mutableSetBlock(chunks, [centerX + homeX, baseY + 2, doorZ], "door_top");
+        mutableSetBlock(chunks, [centerX + homeX - 1, baseY + 1, centerZ + homeZ], "bed");
+        mutableSetBlock(chunks, [centerX + homeX + 1, baseY + 1, centerZ + homeZ], "wood_table");
+    });
+
+    for (let dx = 3; dx <= 6; dx += 1) for (let dz = 2; dz <= 5; dz += 1) {
+        mutableSetBlock(chunks, [centerX + dx, baseY, centerZ + dz], "farmland");
+        if ((dx + dz) % 2 === 0) mutableSetBlock(chunks, [centerX + dx, baseY + 1, centerZ + dz], "crop_3");
+    }
+    for (let dx = -6; dx <= -3; dx += 1) {
+        mutableSetBlock(chunks, [centerX + dx, baseY + 1, centerZ + 3], "wood_post");
+        mutableSetBlock(chunks, [centerX + dx, baseY + 3, centerZ + 3], "red_wood");
+    }
+    mutableSetBlock(chunks, [centerX - 5, baseY + 1, centerZ + 4], "chest");
+    mutableSetBlock(chunks, [centerX - 4, baseY + 1, centerZ + 4], "crate");
+    mutableSetBlock(chunks, [centerX, baseY + 1, centerZ + 2], "lantern");
+    return true;
+}
+
+function prepareCityDistrict(chunks, terrainSeed, structure, centerX, centerZ, foundation) {
+    const baseY = structure.baseY;
+    for (let dx = -8; dx <= 7; dx += 1) for (let dz = -8; dz <= 7; dz += 1) {
+        const x = centerX + dx;
+        const z = centerZ + dz;
+        const surface = surfaceHeight(terrainSeed, x, z);
+        for (let y = baseY + 1; y <= Math.max(surface, baseY + 23); y += 1) mutableSetBlock(chunks, [x, y, z], null);
+        for (let y = surface + 1; y <= baseY; y += 1) mutableSetBlock(chunks, [x, y, z], foundation);
+        mutableSetBlock(chunks, [x, baseY, z], foundation);
+    }
+    return baseY;
+}
+
+function addCityBuilding(chunks, centerX, centerZ, baseY, localX, localZ, floors, palette, variant = 0) {
+    const half = 2;
+    const floorHeight = 4;
+    for (let floor = 0; floor < floors; floor += 1) {
+        const floorY = baseY + floor * floorHeight;
+        for (let dx = -half; dx <= half; dx += 1) for (let dz = -half; dz <= half; dz += 1) {
+            mutableSetBlock(chunks, [centerX + localX + dx, floorY, centerZ + localZ + dz], palette.floor);
+        }
+        for (let dy = 1; dy <= 3; dy += 1) for (let dx = -half; dx <= half; dx += 1) for (let dz = -half; dz <= half; dz += 1) {
+            if (Math.abs(dx) !== half && Math.abs(dz) !== half) continue;
+            const entrance = floor === 0 && dz === (localZ < 0 ? half : -half) && dx === 0 && dy <= 2;
+            if (entrance) continue;
+            const corner = Math.abs(dx) === half && Math.abs(dz) === half;
+            const window = !corner && dy <= 2 && ((Math.abs(dx) === half && dz === 0) || (Math.abs(dz) === half && Math.abs(dx) === 1));
+            mutableSetBlock(chunks, [centerX + localX + dx, floorY + dy, centerZ + localZ + dz], corner ? palette.frame : window ? "window" : palette.wall);
+        }
+        mutableSetBlock(chunks, [centerX + localX - 1, floorY + 1, centerZ + localZ], floor % 2 ? "cabinet" : "bed");
+        mutableSetBlock(chunks, [centerX + localX + 1, floorY + 1, centerZ + localZ], "wood_table");
+        mutableSetBlock(chunks, [centerX + localX, floorY + 3, centerZ + localZ], "lantern");
+        if (floors >= 3) mutableSetBlock(chunks, [centerX + localX + 1, floorY, centerZ + localZ - 1], "elevator");
+    }
+    const roofY = baseY + floors * floorHeight;
+    for (let dx = -half; dx <= half; dx += 1) for (let dz = -half; dz <= half; dz += 1) {
+        mutableSetBlock(chunks, [centerX + localX + dx, roofY, centerZ + localZ + dz], variant % 2 ? palette.accent : palette.roof);
+        if (Math.abs(dx) === half || Math.abs(dz) === half) mutableSetBlock(chunks, [centerX + localX + dx, roofY + 1, centerZ + localZ + dz], "wood_railing");
+    }
+    const doorZ = centerZ + localZ + (localZ < 0 ? half : -half);
+    mutableSetBlock(chunks, [centerX + localX, baseY + 1, doorZ], "door");
+    mutableSetBlock(chunks, [centerX + localX, baseY + 2, doorZ], "door_top");
+}
+
+function addCityMarket(chunks, centerX, centerZ, baseY) {
+    [[-5, -5], [5, -5], [-5, 5], [5, 5]].forEach(([localX, localZ], index) => {
+        for (const dx of [-2, 2]) for (const dz of [-2, 2]) {
+            mutableSetBlock(chunks, [centerX + localX + dx, baseY + 1, centerZ + localZ + dz], "wood_post");
+            mutableSetBlock(chunks, [centerX + localX + dx, baseY + 2, centerZ + localZ + dz], "wood_post");
+        }
+        for (let dx = -2; dx <= 2; dx += 1) for (let dz = -2; dz <= 2; dz += 1) {
+            mutableSetBlock(chunks, [centerX + localX + dx, baseY + 3, centerZ + localZ + dz], index % 2 ? "pale_wood" : "red_wood");
+        }
+        mutableSetBlock(chunks, [centerX + localX, baseY + 1, centerZ + localZ], index % 2 ? "barrel" : "crate");
+        mutableSetBlock(chunks, [centerX + localX + 1, baseY + 1, centerZ + localZ], "basket");
+    });
+}
+
+function addCityPark(chunks, centerX, centerZ, baseY) {
+    for (let dx = -7; dx <= 7; dx += 1) for (let dz = -7; dz <= 7; dz += 1) {
+        if (Math.abs(dx) > 2 && Math.abs(dz) > 2) mutableSetBlock(chunks, [centerX + dx, baseY, centerZ + dz], "grass");
+    }
+    [[-5, -5], [5, -5], [-5, 5], [5, 5]].forEach(([dx, dz], index) => {
+        mutableSetBlock(chunks, [centerX + dx, baseY + 1, centerZ + dz], index % 2 ? "bush" : "flowerpot");
+        mutableSetBlock(chunks, [centerX + dx + (dx < 0 ? 1 : -1), baseY + 1, centerZ + dz], "bench");
+    });
+}
+
+function addCityPlaza(chunks, centerX, centerZ, baseY) {
+    for (let dx = -7; dx <= 7; dx += 1) for (let dz = -7; dz <= 7; dz += 1) {
+        mutableSetBlock(chunks, [centerX + dx, baseY, centerZ + dz], (dx + dz) % 2 ? "polished_stone" : "stone");
+    }
+    for (let dx = -2; dx <= 2; dx += 1) for (let dz = -2; dz <= 2; dz += 1) {
+        const edge = Math.abs(dx) === 2 || Math.abs(dz) === 2;
+        mutableSetBlock(chunks, [centerX + dx, baseY + 1, centerZ + dz], edge ? "stone_slab" : "water");
+    }
+    mutableSetBlock(chunks, [centerX, baseY + 2, centerZ], "polished_stone");
+    mutableSetBlock(chunks, [centerX, baseY + 3, centerZ], "lantern");
+    [[-5, -5], [5, -5], [-5, 5], [5, 5]].forEach(([dx, dz]) => mutableSetBlock(chunks, [centerX + dx, baseY + 1, centerZ + dz], "bench"));
+}
+
+function addCityDistrict(chunks, seed, structure, centerX, centerZ) {
+    const terrainSeed = structure.dimensionSeed ?? seed;
+    const palette = landmarkPalette(structure.style);
+    const baseY = prepareCityDistrict(chunks, terrainSeed, structure, centerX, centerZ, palette.foundation);
+    const central = structure.districtX === 0 && structure.districtZ === 0;
+    const park = structure.districtX === -1 && structure.districtZ === 0;
+    const market = structure.districtX === 0 && structure.districtZ === 1;
+
+    // Every district receives the same aligned street cross, sidewalks, crossings, and lamps.
+    for (let dx = -8; dx <= 7; dx += 1) for (let dz = -8; dz <= 7; dz += 1) {
+        if (Math.abs(dx) <= 1 || Math.abs(dz) <= 1) mutableSetBlock(chunks, [centerX + dx, baseY, centerZ + dz], "gray_brick");
+        else if (Math.abs(dx) === 2 || Math.abs(dz) === 2) mutableSetBlock(chunks, [centerX + dx, baseY, centerZ + dz], "polished_stone");
+    }
+    [[-2, -2], [2, -2], [-2, 2], [2, 2]].forEach(([dx, dz]) => {
+        mutableSetBlock(chunks, [centerX + dx, baseY + 1, centerZ + dz], "wood_post");
+        mutableSetBlock(chunks, [centerX + dx, baseY + 2, centerZ + dz], "lantern");
+    });
+    mutableSetBlock(chunks, [centerX + 3, baseY + 1, centerZ + 2], structure.districtX === 0 && structure.districtZ === 0 ? "sign" : "path_marker");
+
+    if (central) addCityPlaza(chunks, centerX, centerZ, baseY);
+    else if (park) addCityPark(chunks, centerX, centerZ, baseY);
+    else if (market) addCityMarket(chunks, centerX, centerZ, baseY);
+    else {
+        const numericSeed = seedToNumber(`${seed}:city:${structure.districtX},${structure.districtZ}`);
+        const positions = [[-5, -5], [5, -5], [-5, 5], [5, 5]];
+        positions.forEach(([localX, localZ], index) => {
+            if (index === 3 && randomAt(numericSeed + 101, index, 0, 0) < 0.45) {
+                mutableSetBlock(chunks, [centerX + localX, baseY + 1, centerZ + localZ], "planter");
+                mutableSetBlock(chunks, [centerX + localX + 1, baseY + 1, centerZ + localZ], "bench");
+                return;
+            }
+            const floors = 2 + Math.floor(randomAt(numericSeed + 211, index, 0, 0) * 3);
+            addCityBuilding(chunks, centerX, centerZ, baseY, localX, localZ, floors, palette, index);
+        });
+    }
+    return true;
+}
+
 export function addStructure(chunks, seed, structure) {
     if (!structure) return chunks;
-    const next = new Map(Array.from(chunks, ([key, chunk]) => [key, new Map(chunk)]));
+    // Generated structures are contained by their source column. Clone only
+    // that column's vertical chunks so upgrading one city district does not
+    // copy every block in a large explored world on the main thread.
+    const next = new Map(chunks);
+    chunks.forEach((chunk, key) => {
+        const [chunkX, , chunkZ] = key.split(",").map(Number);
+        if (chunkX === structure.chunkX && chunkZ === structure.chunkZ) {
+            next.set(key, new Map(chunk));
+        }
+    });
     const centerX = structure.chunkX * CHUNK_SIZE + 8;
     const centerZ = structure.chunkZ * CHUNK_SIZE + 8;
     const terrainSeed = structure.dimensionSeed ?? seed;
@@ -407,6 +651,12 @@ export function addStructure(chunks, seed, structure) {
     }
     if (structure.type === "building") {
         return addBuilding(next, seed, structure, centerX, centerZ) ? next : chunks;
+    }
+    if (structure.type === "village") {
+        return addVillage(next, seed, structure, centerX, centerZ) ? next : chunks;
+    }
+    if (structure.type === "city") {
+        return addCityDistrict(next, seed, structure, centerX, centerZ) ? next : chunks;
     }
     if (hasLakeWater(terrainSeed, centerX, centerZ, y)) return chunks;
     if (structure.type === "crystal_garden") {

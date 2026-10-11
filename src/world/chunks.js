@@ -110,3 +110,47 @@ export function neighboringChunkKeys(key) {
         chunkKey(chunkX, chunkY, chunkZ - 1),
     ];
 }
+
+// Meshing needs every block in the target chunk, but only the inward-facing
+// layer of each direct neighbor. Keeping the worker payload this small avoids
+// cloning six complete chunks on the main thread for every mesh request.
+export function meshingChunkNeighborhood(chunks, key) {
+    const [chunkX, chunkY, chunkZ] = parseChunkKey(key);
+    const compact = new Map();
+    const selected = chunks.get(key);
+    if (selected) compact.set(key, selected);
+
+    const neighbors = [
+        [chunkX + 1, chunkY, chunkZ, 0, null, null],
+        [chunkX - 1, chunkY, chunkZ, CHUNK_SIZE - 1, null, null],
+        [chunkX, chunkY + 1, chunkZ, null, 0, null],
+        [chunkX, chunkY - 1, chunkZ, null, CHUNK_SIZE - 1, null],
+        [chunkX, chunkY, chunkZ + 1, null, null, 0],
+        [chunkX, chunkY, chunkZ - 1, null, null, CHUNK_SIZE - 1],
+    ];
+
+    neighbors.forEach(([x, y, z, fixedX, fixedY, fixedZ]) => {
+        const neighborKey = chunkKey(x, y, z);
+        const source = chunks.get(neighborKey);
+        if (!source) return;
+        const boundary = new Map();
+        const minX = fixedX ?? 0;
+        const maxX = fixedX ?? CHUNK_SIZE - 1;
+        const minY = fixedY ?? 0;
+        const maxY = fixedY ?? CHUNK_SIZE - 1;
+        const minZ = fixedZ ?? 0;
+        const maxZ = fixedZ ?? CHUNK_SIZE - 1;
+        for (let localY = minY; localY <= maxY; localY += 1) {
+            for (let localZ = minZ; localZ <= maxZ; localZ += 1) {
+                for (let localX = minX; localX <= maxX; localX += 1) {
+                    const index = localIndex(localX, localY, localZ);
+                    const blockId = source.get(index);
+                    if (blockId) boundary.set(index, blockId);
+                }
+            }
+        }
+        if (boundary.size) compact.set(neighborKey, boundary);
+    });
+
+    return compact;
+}

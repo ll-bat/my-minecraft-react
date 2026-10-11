@@ -47,7 +47,7 @@ export const DebugOverlay = () => {
             <span>Layers: O {metrics.layers.opaque.toLocaleString()} · C {metrics.layers.cutout.toLocaleString()} · T {metrics.layers.translucent.toLocaleString()} · E {metrics.layers.emissive.toLocaleString()}</span>
             <span>Objects: furniture {metrics.objects.furniture.toLocaleString()} · decor {metrics.objects.decor.toLocaleString()} · outdoor {metrics.objects.outdoor.toLocaleString()}</span>
             <span>Budget D{metrics.budgetDistance}: {Object.values(metrics.withinBudget).every(Boolean) ? "within target" : `over ${Object.entries(metrics.withinBudget).filter(([, passing]) => !passing).map(([name]) => name).join(", ")}`}</span>
-            {[2, 4].map((distance) => metrics.distanceProfiles[distance] && <span key={distance}>
+            {[2, 4, 6, 9].map((distance) => metrics.distanceProfiles[distance] && <span key={distance}>
                 D{distance}: {metrics.distanceProfiles[distance].frameMs.toFixed(1)} ms · {metrics.distanceProfiles[distance].drawCalls} calls · {metrics.distanceProfiles[distance].triangles.toLocaleString()} tris
             </span>)}
         </>}

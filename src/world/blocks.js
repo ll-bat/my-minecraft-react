@@ -47,6 +47,8 @@ export const BLOCKS = [
     {id: "bed", name: "Bed", ...blockVisual({top: "bed_top", bottom: "bed_frame", north: "bed_end", side: "bed_side", all: "bed_side"}, "bed_top"), uiColor: "#c64141", hardness: 350, solid: true, oriented: true, shape: "bed"},
     {id: "wood_slab", name: "Wood Slab", ...blockVisual({all: "wood"}), uiColor: "#9b6635", hardness: 450, preferredTool: "axe", solid: true, shape: "slab"},
     {id: "stone_slab", name: "Stone Slab", ...blockVisual({all: "stone"}), uiColor: "#777777", hardness: 750, preferredTool: "pickaxe", solid: true, shape: "slab"},
+    {id: "track", name: "Minecart Track", ...blockVisual({all: "brick_gray"}), uiColor: "#7d7569", hardness: 420, preferredTool: "pickaxe", solid: false, transparent: true, oriented: true, shape: "track"},
+    {id: "elevator", name: "Elevator Platform", ...blockVisual({all: "polished_stone"}), uiColor: "#9aa4aa", hardness: 900, preferredTool: "pickaxe", solid: true, shape: "elevator"},
     {id: "wood_stairs", name: "Wood Stairs", ...blockVisual({all: "wood"}), uiColor: "#9b6635", hardness: 500, preferredTool: "axe", solid: true, oriented: true, shape: "stairs"},
     {id: "stone_stairs", name: "Stone Stairs", ...blockVisual({all: "stone"}), uiColor: "#777777", hardness: 800, preferredTool: "pickaxe", solid: true, oriented: true, shape: "stairs"},
     {id: "wood_fence", name: "Wood Fence", ...blockVisual({all: "wood"}), uiColor: "#9b6635", hardness: 500, preferredTool: "axe", solid: true, shape: "fence"},

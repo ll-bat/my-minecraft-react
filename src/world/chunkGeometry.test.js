@@ -1,8 +1,21 @@
-import {setBlock} from "./chunks";
+import {meshingChunkNeighborhood, setBlock} from "./chunks";
 import {buildChunkMeshData, voxelFromIntersection} from "./chunkGeometry";
 import {BLOCK_BY_ID} from "./blocks";
 
 describe("chunk geometry", () => {
+    test("a compact worker neighborhood preserves faces at chunk boundaries", () => {
+        let chunks = setBlock(new Map(), [15, 0, 0], "stone");
+        chunks = setBlock(chunks, [16, 0, 0], "stone");
+
+        const complete = buildChunkMeshData(chunks, "0,0,0");
+        const compact = buildChunkMeshData(meshingChunkNeighborhood(chunks, "0,0,0"), "0,0,0");
+
+        expect(compact.materials.get("atlas:opaque").positions).toEqual(
+            complete.materials.get("atlas:opaque").positions
+        );
+        expect(compact.collision).toEqual(complete.collision);
+    });
+
     test("hides the shared face between neighboring solid blocks", () => {
         let chunks = setBlock(new Map(), [0, 0, 0], "stone");
         chunks = setBlock(chunks, [1, 0, 0], "stone");

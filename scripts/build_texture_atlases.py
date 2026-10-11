@@ -8,6 +8,7 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageOps
 
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "src/images/assets/kenney-voxel-pack"
+FISH_ASSETS = ROOT / "src/images/assets/kenney-fish-pack"
 SOURCE, ITEM_SOURCE = ASSETS / "tiles", ASSETS / "items"
 GAME = ROOT / "src/images/game"
 BLOCKS, ITEMS, ATLASES = GAME / "blocks", GAME / "items", GAME / "atlases"
@@ -67,6 +68,11 @@ ITEM_TEXTURES = {
     "stone_shovel": ("shovel_iron.png", "stone_tool"),
 }
 CUSTOM_ITEMS = ["stick", "iron_ingot", "copper_ingot", "gold_ingot", "crystal", "spawn_sheep", "spawn_rabbit", "spawn_glow_sprite"]
+FISH_ITEMS = {
+    "spawn_fish_blue": "fish_blue.png",
+    "spawn_fish_orange": "fish_orange.png",
+    "spawn_fish_pink": "fish_pink.png",
+}
 
 
 def transform(image, operation):
@@ -213,6 +219,9 @@ def main():
         image = transform(Image.open(ITEM_SOURCE / source_name), operation).resize((SOURCE_SIZE, SOURCE_SIZE), Image.Resampling.NEAREST); image.save(ITEMS / f"{name}.png", optimize=True); item_entries.append((name, image)); item_manifest.append({"id": name, "source": f"src/images/assets/kenney-voxel-pack/items/{source_name}", "output": f"src/images/game/items/{name}.png", "modification": operation or "copied"})
     for name in CUSTOM_ITEMS:
         image = custom_item(name); image.save(ITEMS / f"{name}.png", optimize=True); item_entries.append((name, image)); item_manifest.append({"id": name, "source": "project-generated", "output": f"src/images/game/items/{name}.png", "modification": "original scripted pixel art"})
+    for name, source_name in sorted(FISH_ITEMS.items()):
+        image = Image.open(FISH_ASSETS / source_name).convert("RGBA").resize((SOURCE_SIZE, SOURCE_SIZE), Image.Resampling.NEAREST)
+        image.save(ITEMS / f"{name}.png", optimize=True); item_entries.append((name, image)); item_manifest.append({"id": name, "source": f"src/images/assets/kenney-fish-pack/{source_name}", "output": f"src/images/game/items/{name}.png", "modification": "copied and packed into shared item atlas", "license": "CC0-1.0", "author": "Kenney"})
     for path in sorted(MODEL_PREVIEWS.glob("*.png")):
         name = f"model_{path.stem}"; image = Image.open(path).convert("RGBA").resize((SOURCE_SIZE, SOURCE_SIZE), Image.Resampling.NEAREST)
         image.save(ITEMS / f"{name}.png", optimize=True); item_entries.append((name, image)); item_manifest.append({"id": name, "source": f"src/images/game/models/previews/{path.name}", "output": f"src/images/game/items/{name}.png", "modification": "rendered from project glTF cuboids"})

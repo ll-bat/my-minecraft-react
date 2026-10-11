@@ -131,65 +131,80 @@
       "x": 128,
       "y": 384
     },
-    "spawn_glow_sprite": {
+    "spawn_fish_blue": {
       "size": 128,
       "x": 256,
+      "y": 384
+    },
+    "spawn_fish_orange": {
+      "size": 128,
+      "x": 384,
+      "y": 384
+    },
+    "spawn_fish_pink": {
+      "size": 128,
+      "x": 512,
+      "y": 384
+    },
+    "spawn_glow_sprite": {
+      "size": 128,
+      "x": 640,
       "y": 384
     },
     "spawn_rabbit": {
       "size": 128,
-      "x": 384,
+      "x": 768,
       "y": 384
     },
     "spawn_sheep": {
       "size": 128,
-      "x": 512,
+      "x": 896,
       "y": 384
     },
     "stick": {
       "size": 128,
-      "x": 640,
-      "y": 384
-    },
-    "stone_axe": {
-      "size": 128,
-      "x": 768,
-      "y": 384
-    },
-    "stone_pickaxe": {
-      "size": 128,
-      "x": 896,
-      "y": 384
-    },
-    "stone_shovel": {
-      "size": 128,
       "x": 0,
       "y": 512
     },
-    "wheat": {
+    "stone_axe": {
       "size": 128,
       "x": 128,
       "y": 512
     },
-    "wooden_axe": {
+    "stone_pickaxe": {
       "size": 128,
       "x": 256,
       "y": 512
     },
-    "wooden_hoe": {
+    "stone_shovel": {
       "size": 128,
       "x": 384,
       "y": 512
     },
-    "wooden_pickaxe": {
+    "wheat": {
       "size": 128,
       "x": 512,
       "y": 512
     },
-    "wooden_shovel": {
+    "wooden_axe": {
       "size": 128,
       "x": 640,
       "y": 512
+    },
+    "wooden_hoe": {
+      "size": 128,
+      "x": 768,
+      "y": 512
+    },
+    "wooden_pickaxe": {
+      "size": 128,
+      "x": 896,
+      "y": 512
+    },
+    "wooden_shovel": {
+      "size": 128,
+      "x": 0,
+      "y": 640
     }
   },
   "size": [

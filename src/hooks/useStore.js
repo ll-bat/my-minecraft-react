@@ -53,7 +53,7 @@ import {consumeItem} from "../world/inventory";
 import {worldCatalog} from "../world/worldStorage";
 import {registerDataPack, registerSavedPacks, saveDataPack} from "../world/dataPacks";
 import {generateTerrainColumnAsync} from "../world/terrainStreaming";
-import {addStructure, cityCenter, structureForColumn} from "../world/structures";
+import {addStructure, cityCenter, stadiumLocations, structureForColumn} from "../world/structures";
 
 export {WORLD_STORAGE_KEY};
 
@@ -115,6 +115,32 @@ function communityGroupForStructure(structure) {
         : `${structure.id}:community`;
 }
 
+function builtGroupForStructure(structure) {
+    if (structure?.type === "city") return `${structure.id}:${structure.districtX},${structure.districtZ}:built`;
+    if (structure?.type === "stadium") return structure.size === "grand"
+        ? `${structure.id}:built:grand-v1`
+        : `${structure.id}:built:large-v2`;
+    return null;
+}
+
+function generatedWorldMarkers(seed) {
+    const markers = [{
+        id: "generated-small-city",
+        name: "Small City",
+        position: cityCenter(seed),
+        dimension: "overworld",
+        color: "#e4b65d",
+    }];
+    stadiumLocations(seed).forEach(({position, size}, index) => markers.push({
+        id: `generated-nearby-stadium-${index + 1}`,
+        name: size === "grand" ? `Grand Stadium ${index - 2}` : `Stadium ${index + 1}`,
+        position,
+        dimension: "overworld",
+        color: size === "grand" ? "#e4a84f" : "#68c77a",
+    }));
+    return markers;
+}
+
 function mergeGeneratedColumn(chunks, generated) {
     const next = new Map(chunks);
     generated.forEach((generatedChunk, key) => {
@@ -158,10 +184,11 @@ function initialState() {
     const saved = readWorld();
     const seed = saved?.seed ?? DEFAULT_WORLD_SEED;
     const playerPosition = saved?.playerPosition ?? spawnPosition(seed);
-    const generatedCityMarker = {id: "generated-small-city", name: "Small City", position: cityCenter(seed), dimension: "overworld", color: "#e4b65d"};
-    const markers = saved?.markers?.some((marker) => marker.id === generatedCityMarker.id)
-        ? saved.markers
-        : [...(saved?.markers ?? []), generatedCityMarker];
+    const generatedMarkers = generatedWorldMarkers(seed);
+    const markers = [...(saved?.markers ?? [])].filter((marker) => marker.id !== "generated-nearest-stadium");
+    generatedMarkers.forEach((marker) => {
+        if (!markers.some((existing) => existing.id === marker.id)) markers.push(marker);
+    });
     const spawnedCreatureGroups = new Set(saved?.spawnedCreatureGroups ?? []);
     let entities = saved?.entities ?? [];
     if ((saved?.gameRules?.creatures ?? true) && saved?.chunks) {
@@ -334,13 +361,11 @@ export const useStore = create((set, get) => ({
                     const existingStructure = generationIdentity.dimension === "overworld"
                         ? structureForColumn(generationIdentity.seed, chunkX, chunkZ, generationIdentity.dimension)
                         : null;
-                    const cityBuiltGroup = existingStructure?.type === "city"
-                        ? `${existingStructure.id}:${existingStructure.districtX},${existingStructure.districtZ}:built`
-                        : null;
-                    if (cityBuiltGroup && !beforeGeneration.spawnedCreatureGroups.has(cityBuiltGroup)) {
+                    const structureBuiltGroup = builtGroupForStructure(existingStructure);
+                    if (structureBuiltGroup && !beforeGeneration.spawnedCreatureGroups.has(structureBuiltGroup)) {
                         set((state) => {
                             const chunks = addStructure(state.chunks, generationIdentity.seed, {...existingStructure, dimensionSeed: generationIdentity.seed});
-                            const spawnedCreatureGroups = new Set(state.spawnedCreatureGroups).add(cityBuiltGroup);
+                            const spawnedCreatureGroups = new Set(state.spawnedCreatureGroups).add(structureBuiltGroup);
                             const communityGroup = communityGroupForStructure(existingStructure);
                             let entities = state.entities;
                             if (state.gameRules.creatures && !spawnedCreatureGroups.has(communityGroup)) {
@@ -348,9 +373,11 @@ export const useStore = create((set, get) => ({
                                 spawnedCreatureGroups.add(communityGroup);
                             }
                             const structureIsNew = !state.discoveredStructures.some((entry) => entry.id === existingStructure.id);
+                            const structureRadius = existingStructure.type === "stadium" ? 1 : 0;
                             const revisedKeys = Array.from(chunks.keys()).filter((chunkKeyValue) => {
                                 const [existingX, , existingZ] = parseChunkKey(chunkKeyValue);
-                                return existingX === chunkX && existingZ === chunkZ;
+                                return Math.abs(existingX - chunkX) <= structureRadius
+                                    && Math.abs(existingZ - chunkZ) <= structureRadius;
                             }).flatMap(neighboringChunkKeys);
                             return {
                                 chunks,
@@ -426,9 +453,8 @@ export const useStore = create((set, get) => ({
                             entities = [...entities, ...spawnCommunityForStructure(generationIdentity.seed, structure, chunks)];
                             spawnedCreatureGroups.add(communityGroup);
                         }
-                        if (structure?.type === "city") {
-                            spawnedCreatureGroups.add(`${structure.id}:${structure.districtX},${structure.districtZ}:built`);
-                        }
+                        const structureBuiltGroup = builtGroupForStructure(structure);
+                        if (structureBuiltGroup) spawnedCreatureGroups.add(structureBuiltGroup);
                         const structureIsNew = structure
                             && !state.discoveredStructures.some((entry) => entry.id === structure.id);
                         return {
@@ -1095,7 +1121,7 @@ export const useStore = create((set, get) => ({
     createWorld: (requestedSeed, requestedName = "My World", requestedId = `world-${Date.now()}`) => {
         const seed = String(requestedSeed).trim() || DEFAULT_WORLD_SEED;
         const spawn = spawnPosition(seed);
-        const cityPosition = cityCenter(seed);
+        const generatedMarkers = generatedWorldMarkers(seed);
         set((state) => ({
             seed,
             worldUid: requestedId,
@@ -1129,7 +1155,7 @@ export const useStore = create((set, get) => ({
             dimensionSnapshots: new Map(),
             exploredColumns: new Set(),
             discoveredBiomes: new Set(),
-            markers: [{id: "generated-small-city", name: "Small City", position: cityPosition, dimension: "overworld", color: "#e4b65d"}],
+            markers: generatedMarkers,
             discoveredStructures: [],
             goals: {},
             gameRules: {dayCycle: true, weather: true, creatures: true, cropGrowth: true},

@@ -6,7 +6,13 @@ import {clone as cloneSkeleton} from "three/examples/jsm/utils/SkeletonUtils";
 import {useStore} from "../hooks/useStore";
 import birdModel from "../images/assets/gobkit-owl/bird.glb";
 import airplaneModel from "../images/assets/3dassets-aircraft/low-wing-single.glb";
-import {ambientTreePerches, birdMotion, isAmbientDaytime} from "../world/ambientSky";
+import {
+    ambientAirplaneRoutes,
+    ambientFlyingBirds,
+    ambientTreePerches,
+    birdMotion,
+    isAmbientDaytime
+} from "../world/ambientSky";
 
 const SMOKE_PARTICLE_COUNT = 36;
 const SMOKE_LIFETIME_SECONDS = 7;
@@ -44,7 +50,7 @@ const Bird = ({bird}) => {
     </group>;
 };
 
-const Airplane = ({playerPosition}) => {
+const Airplane = ({playerPosition, route}) => {
     const root = useRef();
     const smoke = useRef();
     const anchor = useRef(new Vector3(...playerPosition));
@@ -73,17 +79,16 @@ const Airplane = ({playerPosition}) => {
         if (!root.current) return;
         anchorTarget.current.set(...playerPosition);
         anchor.current.lerp(anchorTarget.current, Math.min(1, delta * 0.22));
-        const angle = clock.elapsedTime * 0.045;
-        const radius = 68;
+        const angle = clock.elapsedTime * route.speed * route.direction + route.phase * Math.PI * 2;
         root.current.position.set(
-            anchor.current.x + Math.sin(angle) * radius,
-            Math.max(52, anchor.current.y + 34) + Math.sin(angle * 1.7) * 2,
-            anchor.current.z + Math.cos(angle) * radius
+            anchor.current.x + Math.sin(angle) * route.radius,
+            Math.max(48, anchor.current.y + route.height) + Math.sin(angle * 1.7 + route.wobble) * 2,
+            anchor.current.z + Math.cos(angle) * route.radius
         );
         root.current.rotation.set(
-            Math.sin(angle * 1.7) * 0.025,
-            Math.PI - angle,
-            -0.11
+            Math.sin(angle * 1.7 + route.wobble) * 0.025,
+            route.direction > 0 ? Math.PI - angle : -angle,
+            -0.11 * route.direction
         );
         root.current.updateMatrixWorld();
 
@@ -93,7 +98,7 @@ const Airplane = ({playerPosition}) => {
             tailPosition.current.set(0, 0.05, -4.55);
             root.current.localToWorld(tailPosition.current);
             const index = emissionIndex.current % SMOKE_PARTICLE_COUNT;
-            const variation = emissionIndex.current;
+            const variation = emissionIndex.current + route.phase * 1000;
             particles.current[index] = {
                 age: 0,
                 position: tailPosition.current.clone().add(new Vector3(
@@ -152,15 +157,16 @@ export const AmbientSky = () => {
     const worldTime = useStore((state) => state.worldTime);
     const creaturesEnabled = useStore((state) => state.gameRules.creatures);
     const birds = useMemo(
-        () => ambientTreePerches(seed, playerChunk),
+        () => [...ambientTreePerches(seed, playerChunk), ...ambientFlyingBirds(seed, playerChunk)],
         [playerChunk, seed]
     );
+    const airplanes = useMemo(() => ambientAirplaneRoutes(seed), [seed]);
     const visible = dimension === "overworld" && creaturesEnabled && isAmbientDaytime(worldTime);
 
     if (!visible) return null;
     return <group>
         {birds.map((bird) => <Bird bird={bird} key={bird.id}/>)}
-        <Airplane playerPosition={playerPosition}/>
+        {airplanes.map((route) => <Airplane key={route.id} playerPosition={playerPosition} route={route}/>)}
     </group>;
 };
 

@@ -3,7 +3,7 @@ jest.mock("nanoid", () => ({nanoid: () => "test-id"}));
 import {MAX_RENDER_DISTANCE, RENDER_DISTANCE, renderColumnOffsets, useStore, WORLD_STORAGE_KEY} from "./useStore";
 import {getBlock, setBlock} from "../world/chunks";
 import {emptyInventory} from "../world/inventory";
-import {cityForColumn} from "../world/structures";
+import {cityForColumn, stadiumCenter, stadiumCenters, structureForColumn} from "../world/structures";
 import {generateChunkColumn} from "../world/terrain";
 
 describe("world store", () => {
@@ -112,6 +112,37 @@ describe("world store", () => {
         expect(ids).toContain("sign");
         expect(useStore.getState().spawnedCreatureGroups.has(`${city.id}:0,0:built`)).toBe(true);
         expect(useStore.getState().discoveredStructures.filter((structure) => structure.id === city.id)).toHaveLength(1);
+    });
+
+    test("upgrades an already generated stadium column and adds stadium navigation", async () => {
+        const seed = "existing-stadium-upgrade";
+        const position = stadiumCenter(seed);
+        const chunkX = Math.floor(position[0] / 16);
+        const chunkZ = Math.floor(position[2] / 16);
+        const stadium = structureForColumn(seed, chunkX, chunkZ);
+        const key = `${chunkX},${chunkZ}`;
+        useStore.setState({
+            seed,
+            chunks: generateChunkColumn(seed, chunkX, chunkZ),
+            generatedColumns: new Set([key]),
+            spawnedCreatureGroups: new Set(),
+            discoveredStructures: [],
+            entities: [],
+        });
+        await useStore.getState().ensureColumns(chunkX, chunkZ, 0);
+        const ids = Array.from(useStore.getState().chunks.values()).flatMap((chunk) => Array.from(chunk.values()));
+        expect(ids).toContain("metal_fence");
+        expect(useStore.getState().spawnedCreatureGroups.has(`${stadium.id}:built:large-v2`)).toBe(true);
+
+        useStore.getState().createWorld(seed, "Stadium navigation", "stadium-navigation");
+        const stadiumMarkers = useStore.getState().markers.filter((marker) => marker.id.startsWith("generated-nearby-stadium-"));
+        expect(stadiumMarkers).toHaveLength(6);
+        expect(stadiumMarkers.map((marker) => marker.position)).toEqual(stadiumCenters(seed));
+        expect(stadiumMarkers.slice(3).map((marker) => marker.name)).toEqual([
+            "Grand Stadium 1",
+            "Grand Stadium 2",
+            "Grand Stadium 3",
+        ]);
     });
 
     test("keeps the previous view active while the next chunk column streams", async () => {

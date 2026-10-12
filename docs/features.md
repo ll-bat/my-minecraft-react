@@ -129,6 +129,7 @@ Water depends on chunking, transparent block rendering, and block property suppo
    - Add a transparent, tinted water material with a slightly lowered top surface.
    - Render water faces only where they touch air or a different transparent block.
    - Add underwater fog and color changes when the camera is submerged.
+   - Carve deterministic finite rivers with moderate widths, sand beds, tapered endpoints, and paths longer than the maximum view diameter.
 
 2. **Add player interaction with water**
    - Slow walking movement while submerged.
@@ -150,7 +151,7 @@ Water depends on chunking, transparent block rendering, and block property suppo
    - Add rain and snow after biome and water behavior are established.
    - Keep weather effects local to visible chunks.
 
-**Milestone:** Local lakes render correctly, the player can swim, placed fluids remain predictable, and the environment changes over time.
+**Milestone:** Local lakes and finite rivers render correctly, the player can swim, placed fluids remain predictable, and the environment changes over time.
 
 ## Phase 5: Add items and inventory
 
@@ -279,7 +280,7 @@ Water depends on chunking, transparent block rendering, and block property suppo
 
 These features should come after the single-player world and save model are stable.
 
-**Status: Complete.** Multiplayer is excluded from the current project scope. Multiple isolated worlds, export/import, exploration tools, deterministic structures, rare resources, peaceful goals and enchantments, Dream Grove portal travel, and validated namespaced data packs are implemented. Seeded Overworld structures now include sparse furnished houses, four-floor pool hotels, and five-floor residential buildings with biome-aware styles. The ordered implementation is documented in `docs/phase-10-plan.md`.
+**Status: Complete.** Multiplayer is excluded from the current project scope. Multiple isolated worlds, export/import, exploration tools, deterministic structures, rare resources, peaceful goals and enchantments, Dream Grove portal travel, and validated namespaced data packs are implemented. Seeded Overworld structures now include sparse furnished houses, four-floor pool hotels, five-floor residential buildings, and fenced stadiums with biome-aware styles. The ordered implementation is documented in `docs/phase-10-plan.md`.
 
 1. **World creation and management UI**
    - Create, name, list, open, export, import, and delete multiple worlds.
@@ -293,6 +294,7 @@ These features should come after the single-player world and save model are stab
    - Generate villages, ruins, puzzle vaults, and other seeded structures without hostile encounters.
    - Place biome-aware houses only on suitable dry terrain, keep them well spaced, and furnish them with functional doors, windows, lights, and decorative objects.
    - Add rarer multi-floor hotels with pools and tall residential buildings while keeping each generated landmark safe for column-based streaming.
+   - Add standard and grand regional stadiums with seeded size selection, visible fenced enclosures, full marked pitches, tiered stands, wide entrances, goals, benches, scoreboards, and tall floodlights.
    - Add rarer materials, enchantments, and progression goals only when their supporting systems exist.
 
 4. **Dimensions or alternate worlds**

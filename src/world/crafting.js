@@ -21,6 +21,7 @@ export const CRAFTING_RECIPES = [
     shaped("wood_stairs", [["wood", null, null], ["wood", "wood", null], ["wood", "wood", "wood"]], "wood_stairs", 4),
     shaped("stone_stairs", [["stone", null, null], ["stone", "stone", null], ["stone", "stone", "stone"]], "stone_stairs", 4),
     shaped("wood_fence", [["wood", "stick", "wood"], ["wood", "stick", "wood"]], "wood_fence", 3),
+    shaped("metal_fence", [["iron_ingot", "iron_ingot", "iron_ingot"], ["iron_ingot", "iron_ingot", "iron_ingot"]], "metal_fence", 6),
     shaped("stone_wall", [["stone", "stone", "stone"], ["stone", "stone", "stone"]], "stone_wall", 6),
     shaped("wood_post", [["log"], ["log"]], "wood_post", 2),
     shaped("wood_beam", [["log", "log"]], "wood_beam", 2),

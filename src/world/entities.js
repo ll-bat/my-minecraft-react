@@ -1,6 +1,6 @@
 import {chunkCoordinate, getBlock} from "./chunks";
 import {randomAt, seedToNumber} from "./noise";
-import {BIOMES, biomeAt, hasLakeWater, surfaceHeight} from "./terrain";
+import {BIOMES, biomeAt, hasNaturalWater, surfaceHeight} from "./terrain";
 import {BLOCK_BY_ID} from "./blocks";
 
 export const CREATURE_TYPES = {
@@ -58,7 +58,7 @@ export function spawnCreaturesForColumn(seed, chunkX, chunkZ, playerPosition, ni
         const x = chunkX * 16 + 2 + Math.floor(randomAt(numericSeed + 101, chunkX, index, chunkZ) * 12);
         const z = chunkZ * 16 + 2 + Math.floor(randomAt(numericSeed + 211, chunkX, index, chunkZ) * 12);
         const surface = surfaceHeight(seed, x, z);
-        if (hasLakeWater(seed, x, z, surface) || Math.hypot(x - playerPosition[0], z - playerPosition[2]) < 9) continue;
+        if (hasNaturalWater(seed, x, z, surface) || Math.hypot(x - playerPosition[0], z - playerPosition[2]) < 9) continue;
         const type = creatureTypeForBiome(biomeAt(seed, x, z), night);
         entities.push({
             id: `${type}:${chunkX},${chunkZ}:${index}:${group}`,
@@ -185,7 +185,7 @@ function blocked(state, entity, x, z) {
             break;
         }
     }
-    if (Math.abs(creatureGroundY(entity.type, surface) - entity.position[1]) > 1.1 || hasLakeWater(state.seed, gridX, gridZ, surface)) return true;
+    if (Math.abs(creatureGroundY(entity.type, surface) - entity.position[1]) > 1.1 || hasNaturalWater(state.seed, gridX, gridZ, surface)) return true;
     const blockId = getBlock(state.chunks, [Math.round(x), Math.round(surface + 1), Math.round(z)]);
     return Boolean(blockId && (BLOCK_BY_ID[blockId]?.solid || BLOCK_BY_ID[blockId]?.fluid));
 }

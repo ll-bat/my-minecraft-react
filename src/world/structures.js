@@ -1,11 +1,43 @@
 import {randomAt, seedToNumber} from "./noise";
 import {CHUNK_SIZE, chunkKey, localIndex} from "./chunks";
-import {BIOMES, biomeAt, hasLakeWater, surfaceHeight, WORLD_MAX_Y} from "./terrain";
+import {BIOMES, biomeAt, hasNaturalWater, spawnPosition, surfaceHeight, WORLD_MAX_Y} from "./terrain";
 
 const HOUSE_CELL_SIZE = 4;
 const LANDMARK_CELL_SIZE = 7;
 const CITY_RADIUS = 1;
+const NEARBY_STADIUM_COUNT = 3;
+const GRAND_STADIUM_COUNT = 3;
+const STADIUM_LAYOUTS = {
+    standard: {
+        bounds: {minX: -12, maxX: 12, minZ: -11, maxZ: 11},
+        pavingX: 11,
+        pavingZ: 10,
+        pitchX: 7,
+        pitchZ: 8,
+        standTiers: 4,
+        floodlightHeight: 8,
+        topY: 9,
+    },
+    grand: {
+        bounds: {minX: -23, maxX: 23, minZ: -23, maxZ: 23},
+        pavingX: 22,
+        pavingZ: 22,
+        pitchX: 15,
+        pitchZ: 18,
+        standTiers: 6,
+        floodlightHeight: 12,
+        topY: 13,
+    },
+};
+const STADIUM_CHUNK_RADIUS = 1;
 const cityPlanCache = new Map();
+const nearbyStadiumCache = new Map();
+const grandStadiumCache = new Map();
+const landmarkCache = new Map();
+
+function stadiumLayout(structure) {
+    return STADIUM_LAYOUTS[structure?.size === "grand" ? "grand" : "standard"];
+}
 
 function mutableSetBlock(chunks, [x, y, z], blockId) {
     const chunkX = Math.floor(x / CHUNK_SIZE);
@@ -32,7 +64,7 @@ function siteForStructure(seed, centerX, centerZ, bounds, maximumSlope) {
             const x = centerX + dx;
             const z = centerZ + dz;
             const surface = surfaceHeight(seed, x, z);
-            if (hasLakeWater(seed, x, z, surface)) return null;
+            if (hasNaturalWater(seed, x, z, surface)) return null;
             footprint.push({x, z, surface});
         }
     }
@@ -58,7 +90,7 @@ function cityPlan(seed) {
             const z = chunkZ * CHUNK_SIZE + 8 + dz;
             const surface = surfaceHeight(seed, x, z);
             heights.push(surface);
-            if (hasLakeWater(seed, x, z, surface)) wet += 1;
+            if (hasNaturalWater(seed, x, z, surface)) wet += 1;
             if (biomeAt(seed, x, z) === BIOMES.MOUNTAINS) mountains += 1;
         }
         const sorted = heights.sort((left, right) => left - right);
@@ -99,7 +131,182 @@ export function cityCenter(seed) {
     return [plan.chunkX * CHUNK_SIZE + 8, plan.baseY + 1, plan.chunkZ * CHUNK_SIZE + 8];
 }
 
-function landmarkForColumn(seed, chunkX, chunkZ) {
+function angleDifference(left, right) {
+    return Math.abs(Math.atan2(Math.sin(left - right), Math.cos(left - right)));
+}
+
+function nearbyStadiumPlans(seed) {
+    if (nearbyStadiumCache.has(seed)) return nearbyStadiumCache.get(seed);
+    const numericSeed = seedToNumber(`${seed}:nearby-stadiums`);
+    const city = cityPlan(seed);
+    const spawn = spawnPosition(seed);
+    const spawnChunkX = Math.floor(spawn[0] / CHUNK_SIZE);
+    const spawnChunkZ = Math.floor(spawn[2] / CHUNK_SIZE);
+    const layout = STADIUM_LAYOUTS.standard;
+    const candidates = [];
+    for (let offsetX = -3; offsetX <= 3; offsetX += 1) for (let offsetZ = -3; offsetZ <= 3; offsetZ += 1) {
+        const chunkX = spawnChunkX + offsetX;
+        const chunkZ = spawnChunkZ + offsetZ;
+        const distance = Math.hypot(offsetX, offsetZ);
+        if (distance < 1.5 || (Math.abs(chunkX) <= 1 && Math.abs(chunkZ) <= 1)) continue;
+        if (Math.abs(chunkX - city.chunkX) <= CITY_RADIUS && Math.abs(chunkZ - city.chunkZ) <= CITY_RADIUS) continue;
+        const centerX = chunkX * CHUNK_SIZE + 8;
+        const centerZ = chunkZ * CHUNK_SIZE + 8;
+        const samples = [];
+        let wet = 0;
+        let mountains = 0;
+        for (const dx of [layout.bounds.minX, 0, layout.bounds.maxX]) {
+            for (const dz of [layout.bounds.minZ, 0, layout.bounds.maxZ]) {
+                const surface = surfaceHeight(seed, centerX + dx, centerZ + dz);
+                samples.push(surface);
+                if (hasNaturalWater(seed, centerX + dx, centerZ + dz, surface)) wet += 1;
+                if (biomeAt(seed, centerX + dx, centerZ + dz) === BIOMES.MOUNTAINS) mountains += 1;
+            }
+        }
+        candidates.push({
+            chunkX,
+            chunkZ,
+            baseY: Math.max(...samples),
+            distance,
+            angle: Math.atan2(offsetZ, offsetX),
+            jitter: randomAt(numericSeed + 101, chunkX, 0, chunkZ),
+            terrainPenalty: (Math.max(...samples) - Math.min(...samples)) * 1.4 + wet * 2 + mountains * 0.4,
+        });
+    }
+
+    const startingAngle = randomAt(numericSeed + 211, 0, 0, 0) * Math.PI * 2;
+    const selected = [];
+    for (let index = 0; index < NEARBY_STADIUM_COUNT; index += 1) {
+        const targetAngle = startingAngle + index * Math.PI * 2 / NEARBY_STADIUM_COUNT;
+        const best = candidates
+            .filter((candidate) => selected.every((other) => Math.hypot(
+                candidate.chunkX - other.chunkX,
+                candidate.chunkZ - other.chunkZ
+            ) >= 3))
+            .sort((left, right) => (
+                left.distance + left.terrainPenalty + angleDifference(left.angle, targetAngle) * 1.8 + left.jitter
+                - right.distance - right.terrainPenalty - angleDifference(right.angle, targetAngle) * 1.8 - right.jitter
+            ))[0];
+        if (best) selected.push(best);
+    }
+    const plans = selected.map((plan, index) => {
+        const biome = biomeAt(seed, plan.chunkX * CHUNK_SIZE + 8, plan.chunkZ * CHUNK_SIZE + 8);
+        const stylePrefix = biome === BIOMES.DESERT ? "sunstone" : biome === BIOMES.FOREST ? "woodland" : biome === BIOMES.MOUNTAINS ? "alpine" : "garden";
+        return {
+            id: `overworld:${plan.chunkX},${plan.chunkZ}`,
+            type: "stadium",
+            style: `${stylePrefix}_stadium`,
+            biome,
+            chunkX: plan.chunkX,
+            chunkZ: plan.chunkZ,
+            baseY: plan.baseY,
+            nearbyIndex: index,
+            nearSpawn: true,
+            guaranteed: true,
+            size: "standard",
+        };
+    });
+    nearbyStadiumCache.set(seed, plans);
+    return plans;
+}
+
+function grandStadiumPlans(seed) {
+    if (grandStadiumCache.has(seed)) return grandStadiumCache.get(seed);
+    const numericSeed = seedToNumber(`${seed}:grand-stadiums`);
+    const city = cityPlan(seed);
+    const spawn = spawnPosition(seed);
+    const spawnChunkX = Math.floor(spawn[0] / CHUNK_SIZE);
+    const spawnChunkZ = Math.floor(spawn[2] / CHUNK_SIZE);
+    const layout = STADIUM_LAYOUTS.grand;
+    const nearby = nearbyStadiumPlans(seed);
+    const candidates = [];
+    for (let offsetX = -8; offsetX <= 8; offsetX += 1) for (let offsetZ = -8; offsetZ <= 8; offsetZ += 1) {
+        const distance = Math.hypot(offsetX, offsetZ);
+        if (distance < 5 || distance > 8) continue;
+        const chunkX = spawnChunkX + offsetX;
+        const chunkZ = spawnChunkZ + offsetZ;
+        if (Math.abs(chunkX - city.chunkX) <= CITY_RADIUS + STADIUM_CHUNK_RADIUS
+            && Math.abs(chunkZ - city.chunkZ) <= CITY_RADIUS + STADIUM_CHUNK_RADIUS) continue;
+        if (nearby.some((plan) => Math.hypot(plan.chunkX - chunkX, plan.chunkZ - chunkZ) < 4)) continue;
+        const centerX = chunkX * CHUNK_SIZE + 8;
+        const centerZ = chunkZ * CHUNK_SIZE + 8;
+        const samples = [];
+        let wet = 0;
+        let mountains = 0;
+        for (const dx of [layout.bounds.minX, 0, layout.bounds.maxX]) {
+            for (const dz of [layout.bounds.minZ, 0, layout.bounds.maxZ]) {
+                const surface = surfaceHeight(seed, centerX + dx, centerZ + dz);
+                samples.push(surface);
+                if (hasNaturalWater(seed, centerX + dx, centerZ + dz, surface)) wet += 1;
+                if (biomeAt(seed, centerX + dx, centerZ + dz) === BIOMES.MOUNTAINS) mountains += 1;
+            }
+        }
+        candidates.push({
+            chunkX,
+            chunkZ,
+            baseY: Math.max(...samples),
+            distance,
+            angle: Math.atan2(offsetZ, offsetX),
+            jitter: randomAt(numericSeed + 101, chunkX, 0, chunkZ),
+            terrainPenalty: (Math.max(...samples) - Math.min(...samples)) * 1.4 + wet * 2 + mountains * 0.4,
+        });
+    }
+
+    const startingAngle = randomAt(numericSeed + 211, 0, 0, 0) * Math.PI * 2;
+    const selected = [];
+    for (let index = 0; index < GRAND_STADIUM_COUNT; index += 1) {
+        const targetAngle = startingAngle + index * Math.PI * 2 / GRAND_STADIUM_COUNT;
+        const best = candidates
+            .filter((candidate) => selected.every((other) => Math.hypot(
+                candidate.chunkX - other.chunkX,
+                candidate.chunkZ - other.chunkZ
+            ) >= 5))
+            .sort((left, right) => (
+                left.distance + left.terrainPenalty + angleDifference(left.angle, targetAngle) * 2 + left.jitter
+                - right.distance - right.terrainPenalty - angleDifference(right.angle, targetAngle) * 2 - right.jitter
+            ))[0];
+        if (best) selected.push(best);
+    }
+    const plans = selected.map((plan, index) => {
+        const biome = biomeAt(seed, plan.chunkX * CHUNK_SIZE + 8, plan.chunkZ * CHUNK_SIZE + 8);
+        const stylePrefix = biome === BIOMES.DESERT ? "sunstone" : biome === BIOMES.FOREST ? "woodland" : biome === BIOMES.MOUNTAINS ? "alpine" : "garden";
+        return {
+            id: `overworld:${plan.chunkX},${plan.chunkZ}`,
+            type: "stadium",
+            style: `${stylePrefix}_stadium`,
+            biome,
+            chunkX: plan.chunkX,
+            chunkZ: plan.chunkZ,
+            baseY: plan.baseY,
+            grandIndex: index,
+            size: "grand",
+            guaranteed: true,
+        };
+    });
+    grandStadiumCache.set(seed, plans);
+    return plans;
+}
+
+function plannedStadiums(seed) {
+    return [...nearbyStadiumPlans(seed), ...grandStadiumPlans(seed)];
+}
+
+export function stadiumLocations(seed) {
+    return plannedStadiums(seed).map(({chunkX, chunkZ, baseY, size}) => ({
+        position: [chunkX * CHUNK_SIZE + 8, baseY + 1, chunkZ * CHUNK_SIZE + 8],
+        size,
+    }));
+}
+
+export function stadiumCenters(seed) {
+    return stadiumLocations(seed).map(({position}) => position);
+}
+
+export function stadiumCenter(seed) {
+    return stadiumCenters(seed)[0] ?? null;
+}
+
+function computeLandmarkForColumn(seed, chunkX, chunkZ) {
     const seedNumber = seedToNumber(`${seed}:landmarks`);
     const cellX = Math.floor(chunkX / LANDMARK_CELL_SIZE);
     const cellZ = Math.floor(chunkZ / LANDMARK_CELL_SIZE);
@@ -112,12 +319,19 @@ function landmarkForColumn(seed, chunkX, chunkZ) {
     const centerX = chunkX * CHUNK_SIZE + 8;
     const centerZ = chunkZ * CHUNK_SIZE + 8;
     const typeRoll = randomAt(seedNumber + 709, cellX, 0, cellZ);
-    const type = typeRoll < 0.28 ? "village" : typeRoll < 0.58 ? "hotel" : "building";
+    const type = typeRoll < 0.25 ? "village" : typeRoll < 0.5 ? "hotel" : typeRoll < 0.75 ? "building" : "stadium";
+    const stadiumSize = type === "stadium" && randomAt(seedNumber + 811, cellX, 0, cellZ) < 0.45
+        ? "grand"
+        : "standard";
+    const stadiumBounds = STADIUM_LAYOUTS[stadiumSize].bounds;
     const bounds = type === "hotel"
         ? {minX: -7, maxX: 7, minZ: -6, maxZ: 6}
+        : type === "stadium" ? stadiumBounds
         : {minX: -7, maxX: 7, minZ: -7, maxZ: 7};
-    const site = siteForStructure(seed, centerX, centerZ, bounds, type === "hotel" ? 2 : 3);
-    const requiredHeadroom = type === "village" ? 8 : type === "hotel" ? 19 : 23;
+    const site = siteForStructure(seed, centerX, centerZ, bounds, type === "hotel" ? 2 : type === "stadium" ? 4 : 3);
+    const requiredHeadroom = type === "village" ? 8
+        : type === "stadium" ? STADIUM_LAYOUTS[stadiumSize].topY
+            : type === "hotel" ? 19 : 23;
     if (!site || site.baseY + requiredHeadroom > WORLD_MAX_Y) return null;
     const biome = biomeAt(seed, centerX, centerZ);
     const stylePrefix = {
@@ -126,7 +340,13 @@ function landmarkForColumn(seed, chunkX, chunkZ) {
         [BIOMES.DESERT]: "sunstone",
         [BIOMES.MOUNTAINS]: "alpine",
     }[biome];
-    return {type, style: `${stylePrefix}_${type}`, biome};
+    return {type, style: `${stylePrefix}_${type}`, biome, ...(type === "stadium" ? {size: stadiumSize} : {})};
+}
+
+function landmarkForColumn(seed, chunkX, chunkZ) {
+    const key = `${seed}:${chunkX},${chunkZ}`;
+    if (!landmarkCache.has(key)) landmarkCache.set(key, computeLandmarkForColumn(seed, chunkX, chunkZ));
+    return landmarkCache.get(key);
 }
 
 function houseForColumn(seed, chunkX, chunkZ) {
@@ -145,7 +365,7 @@ function houseForColumn(seed, chunkX, chunkZ) {
     for (let dx = -5; dx <= 5; dx += 1) {
         for (let dz = -5; dz <= 7; dz += 1) {
             const surface = surfaceHeight(seed, centerX + dx, centerZ + dz);
-            if (hasLakeWater(seed, centerX + dx, centerZ + dz, surface)) return null;
+            if (hasNaturalWater(seed, centerX + dx, centerZ + dz, surface)) return null;
             surfaces.push(surface);
         }
     }
@@ -165,8 +385,24 @@ export function structureForColumn(seed, chunkX, chunkZ, dimension = "overworld"
     if (dimension === "overworld") {
         const city = cityForColumn(seed, chunkX, chunkZ);
         if (city) return city;
+        const plannedStadium = plannedStadiums(seed).find((plan) => plan.chunkX === chunkX && plan.chunkZ === chunkZ);
+        if (plannedStadium) return plannedStadium;
+        // The enlarged venue spans the eight columns around its source. Keep
+        // those columns free of houses and other landmarks; the source column
+        // writes the complete stadium and later terrain merges preserve it.
+        const insidePlannedStadium = plannedStadiums(seed).some((plan) => (
+            Math.abs(plan.chunkX - chunkX) <= STADIUM_CHUNK_RADIUS
+            && Math.abs(plan.chunkZ - chunkZ) <= STADIUM_CHUNK_RADIUS
+        ));
+        if (insidePlannedStadium) return null;
         const landmark = landmarkForColumn(seed, chunkX, chunkZ);
         if (landmark) return {id: `${dimension}:${chunkX},${chunkZ}`, ...landmark, chunkX, chunkZ};
+        for (let offsetX = -STADIUM_CHUNK_RADIUS; offsetX <= STADIUM_CHUNK_RADIUS; offsetX += 1) {
+            for (let offsetZ = -STADIUM_CHUNK_RADIUS; offsetZ <= STADIUM_CHUNK_RADIUS; offsetZ += 1) {
+                if (offsetX === 0 && offsetZ === 0) continue;
+                if (landmarkForColumn(seed, chunkX + offsetX, chunkZ + offsetZ)?.type === "stadium") return null;
+            }
+        }
         const house = houseForColumn(seed, chunkX, chunkZ);
         if (house) return {id: `${dimension}:${chunkX},${chunkZ}`, ...house, chunkX, chunkZ};
     }
@@ -191,7 +427,7 @@ function addHouse(chunks, seed, structure, centerX, centerZ) {
             const x = centerX + dx;
             const z = centerZ + dz;
             const surface = surfaceHeight(terrainSeed, x, z);
-            if (hasLakeWater(terrainSeed, x, z, surface)) return false;
+            if (hasNaturalWater(terrainSeed, x, z, surface)) return false;
             footprint.push({x, z, surface});
         }
     }
@@ -291,6 +527,24 @@ function prepareLandmarkSite(chunks, terrainSeed, centerX, centerZ, bounds, maxi
         mutableSetBlock(chunks, [x, site.baseY, z], foundation);
     });
     return site;
+}
+
+function prepareGuaranteedStadiumSite(chunks, terrainSeed, centerX, centerZ, foundation, layout) {
+    const footprint = [];
+    for (let dx = layout.bounds.minX; dx <= layout.bounds.maxX; dx += 1) {
+        for (let dz = layout.bounds.minZ; dz <= layout.bounds.maxZ; dz += 1) {
+            const x = centerX + dx;
+            const z = centerZ + dz;
+            footprint.push({x, z, surface: surfaceHeight(terrainSeed, x, z)});
+        }
+    }
+    const baseY = Math.min(WORLD_MAX_Y - layout.topY, Math.max(...footprint.map(({surface}) => surface)));
+    footprint.forEach(({x, z, surface}) => {
+        for (let y = baseY + 1; y <= baseY + layout.topY; y += 1) mutableSetBlock(chunks, [x, y, z], null);
+        for (let y = surface + 1; y <= baseY; y += 1) mutableSetBlock(chunks, [x, y, z], foundation);
+        mutableSetBlock(chunks, [x, baseY, z], foundation);
+    });
+    return {baseY, footprint};
 }
 
 function addHotel(chunks, seed, structure, centerX, centerZ) {
@@ -508,6 +762,101 @@ function addVillage(chunks, seed, structure, centerX, centerZ) {
     return true;
 }
 
+function addStadium(chunks, seed, structure, centerX, centerZ) {
+    const terrainSeed = structure.dimensionSeed ?? seed;
+    const palette = landmarkPalette(structure.style);
+    const layout = stadiumLayout(structure);
+    const site = structure.guaranteed
+        ? prepareGuaranteedStadiumSite(chunks, terrainSeed, centerX, centerZ, palette.foundation, layout)
+        : prepareLandmarkSite(
+            chunks,
+            terrainSeed,
+            centerX,
+            centerZ,
+            layout.bounds,
+            4,
+            layout.topY,
+            palette.foundation
+        );
+    if (!site) return false;
+    const baseY = site.baseY;
+
+    // Pale paving surrounds a marked grass pitch and separates spectators from play.
+    for (let dx = -layout.pavingX; dx <= layout.pavingX; dx += 1) {
+        for (let dz = -layout.pavingZ; dz <= layout.pavingZ; dz += 1) {
+            const pitch = Math.abs(dx) <= layout.pitchX && Math.abs(dz) <= layout.pitchZ;
+            mutableSetBlock(chunks, [centerX + dx, baseY, centerZ + dz], pitch ? "grass" : "polished_stone");
+        }
+    }
+    for (let dx = -layout.pitchX; dx <= layout.pitchX; dx += 1) {
+        mutableSetBlock(chunks, [centerX + dx, baseY, centerZ], "snow");
+        if (Math.abs(dx) === layout.pitchX) for (let dz = -layout.pitchZ; dz <= layout.pitchZ; dz += 1) {
+            mutableSetBlock(chunks, [centerX + dx, baseY, centerZ + dz], "snow");
+        }
+    }
+    for (let dz = -layout.pitchZ; dz <= layout.pitchZ; dz += 1) {
+        if (Math.abs(dz) === layout.pitchZ) for (let dx = -layout.pitchX; dx <= layout.pitchX; dx += 1) {
+            mutableSetBlock(chunks, [centerX + dx, baseY, centerZ + dz], "snow");
+        }
+    }
+
+    // Broad seating tiers rise on both sides of the marked pitch.
+    for (let dz = -layout.pitchZ; dz <= layout.pitchZ; dz += 1) {
+        for (const side of [-1, 1]) {
+            for (let tier = 0; tier < layout.standTiers; tier += 1) {
+                const standX = centerX + side * (layout.pitchX + 1 + tier);
+                for (let dy = 1; dy <= tier + 1; dy += 1) {
+                    mutableSetBlock(chunks, [standX, baseY + dy, centerZ + dz], "gray_brick");
+                }
+                mutableSetBlock(chunks, [standX, baseY + tier + 2, centerZ + dz], "stone_slab");
+            }
+        }
+    }
+
+    // Goals sit just inside the end lines.
+    const goalHalfWidth = structure.size === "grand" ? 6 : 3;
+    const goalHeight = structure.size === "grand" ? 4 : 3;
+    for (const goalZ of [-layout.pitchZ, layout.pitchZ]) {
+        for (const goalX of [-goalHalfWidth, goalHalfWidth]) for (let dy = 1; dy <= goalHeight; dy += 1) {
+            mutableSetBlock(chunks, [centerX + goalX, baseY + dy, centerZ + goalZ], "metal_fence");
+        }
+        for (let goalX = -goalHalfWidth; goalX <= goalHalfWidth; goalX += 1) {
+            mutableSetBlock(chunks, [centerX + goalX, baseY + goalHeight + 1, centerZ + goalZ], "metal_fence");
+        }
+    }
+
+    // Open metal rails make the enclosure obvious without hiding the field.
+    const entranceHalfWidth = structure.size === "grand" ? 2 : 1;
+    for (let dx = layout.bounds.minX; dx <= layout.bounds.maxX; dx += 1) {
+        for (let dz = layout.bounds.minZ; dz <= layout.bounds.maxZ; dz += 1) {
+            if (dx !== layout.bounds.minX && dx !== layout.bounds.maxX
+                && dz !== layout.bounds.minZ && dz !== layout.bounds.maxZ) continue;
+            const entrance = dz === layout.bounds.maxZ && Math.abs(dx) <= entranceHalfWidth;
+            if (entrance) continue;
+            mutableSetBlock(chunks, [centerX + dx, baseY + 1, centerZ + dz], "metal_fence");
+            mutableSetBlock(chunks, [centerX + dx, baseY + 2, centerZ + dz], "metal_fence");
+        }
+    }
+    mutableSetBlock(chunks, [centerX, baseY + 1, centerZ + layout.bounds.maxZ], "door");
+    mutableSetBlock(chunks, [centerX, baseY + 2, centerZ + layout.bounds.maxZ], "door_top");
+
+    // Floodlights, team benches, and a small scoreboard finish the venue.
+    const lightX = layout.pavingX;
+    const lightZ = layout.pavingZ;
+    [[-lightX, -lightZ], [lightX, -lightZ], [-lightX, lightZ], [lightX, lightZ]].forEach(([dx, dz]) => {
+        for (let dy = 1; dy < layout.floodlightHeight; dy += 1) mutableSetBlock(chunks, [centerX + dx, baseY + dy, centerZ + dz], "wood_post");
+        mutableSetBlock(chunks, [centerX + dx, baseY + layout.floodlightHeight, centerZ + dz], "lantern");
+    });
+    const benchX = structure.size === "grand" ? 10 : 5;
+    mutableSetBlock(chunks, [centerX - benchX, baseY + 1, centerZ + layout.pitchZ + 1], "bench");
+    mutableSetBlock(chunks, [centerX + benchX, baseY + 1, centerZ + layout.pitchZ + 1], "bench");
+    const scoreboardY = Math.min(layout.topY - 2, layout.standTiers + 1);
+    for (let dx = -2; dx <= 2; dx += 1) {
+        mutableSetBlock(chunks, [centerX + dx, baseY + scoreboardY, centerZ + layout.bounds.minZ], dx === 0 ? "sign" : palette.accent);
+    }
+    return true;
+}
+
 function prepareCityDistrict(chunks, terrainSeed, structure, centerX, centerZ, foundation) {
     const baseY = structure.baseY;
     for (let dx = -8; dx <= 7; dx += 1) for (let dz = -8; dz <= 7; dz += 1) {
@@ -635,7 +984,8 @@ export function addStructure(chunks, seed, structure) {
     const next = new Map(chunks);
     chunks.forEach((chunk, key) => {
         const [chunkX, , chunkZ] = key.split(",").map(Number);
-        if (chunkX === structure.chunkX && chunkZ === structure.chunkZ) {
+        const radius = structure.type === "stadium" ? STADIUM_CHUNK_RADIUS : 0;
+        if (Math.abs(chunkX - structure.chunkX) <= radius && Math.abs(chunkZ - structure.chunkZ) <= radius) {
             next.set(key, new Map(chunk));
         }
     });
@@ -655,10 +1005,13 @@ export function addStructure(chunks, seed, structure) {
     if (structure.type === "village") {
         return addVillage(next, seed, structure, centerX, centerZ) ? next : chunks;
     }
+    if (structure.type === "stadium") {
+        return addStadium(next, seed, structure, centerX, centerZ) ? next : chunks;
+    }
     if (structure.type === "city") {
         return addCityDistrict(next, seed, structure, centerX, centerZ) ? next : chunks;
     }
-    if (hasLakeWater(terrainSeed, centerX, centerZ, y)) return chunks;
+    if (hasNaturalWater(terrainSeed, centerX, centerZ, y)) return chunks;
     if (structure.type === "crystal_garden") {
         for (let dx = -2; dx <= 2; dx += 2) for (let dz = -2; dz <= 2; dz += 2) {
             const height = 1 + (Math.abs(dx + dz) % 3);

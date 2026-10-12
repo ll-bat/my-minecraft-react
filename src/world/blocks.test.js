@@ -31,7 +31,7 @@ describe("block visuals", () => {
     test("includes the lightweight construction collection", () => {
         const expected = {
             wood_slab: "slab", stone_slab: "slab", wood_stairs: "stairs", stone_stairs: "stairs",
-            wood_fence: "fence", stone_wall: "wall", wood_post: "post", wood_beam: "beam",
+            wood_fence: "fence", metal_fence: "fence", stone_wall: "wall", wood_post: "post", wood_beam: "beam",
             wood_railing: "railing", torch: "torch", lantern: "lantern",
         };
         Object.entries(expected).forEach(([id, shape]) => expect(BLOCK_BY_ID[id]?.shape).toBe(shape));

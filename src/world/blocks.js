@@ -52,6 +52,7 @@ export const BLOCKS = [
     {id: "wood_stairs", name: "Wood Stairs", ...blockVisual({all: "wood"}), uiColor: "#9b6635", hardness: 500, preferredTool: "axe", solid: true, oriented: true, shape: "stairs"},
     {id: "stone_stairs", name: "Stone Stairs", ...blockVisual({all: "stone"}), uiColor: "#777777", hardness: 800, preferredTool: "pickaxe", solid: true, oriented: true, shape: "stairs"},
     {id: "wood_fence", name: "Wood Fence", ...blockVisual({all: "wood"}), uiColor: "#9b6635", hardness: 500, preferredTool: "axe", solid: true, shape: "fence"},
+    {id: "metal_fence", name: "Metal Fence", ...blockVisual({all: "polished_stone"}), uiColor: "#9aa4aa", hardness: 800, preferredTool: "pickaxe", requiredTier: 1, solid: true, transparent: true, shape: "fence"},
     {id: "stone_wall", name: "Stone Wall", ...blockVisual({all: "stone"}), uiColor: "#777777", hardness: 850, preferredTool: "pickaxe", solid: true, shape: "wall"},
     {id: "wood_post", name: "Wood Post", ...blockVisual({all: "log_side"}), uiColor: "#76502c", hardness: 550, preferredTool: "axe", solid: true, shape: "post"},
     {id: "wood_beam", name: "Wood Beam", ...blockVisual({all: "log_side"}), uiColor: "#76502c", hardness: 550, preferredTool: "axe", solid: true, oriented: true, shape: "beam"},

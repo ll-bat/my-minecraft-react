@@ -1,4 +1,18 @@
-import {BIOMES, biomeAt, elevatedTerrainAt, generateChunkColumn, hasLakeWater, SEA_LEVEL, spawnPosition, surfaceHeight, WORLD_MIN_Y} from "./terrain";
+import {
+    BIOMES,
+    biomeAt,
+    elevatedTerrainAt,
+    generateChunkColumn,
+    hasLakeWater,
+    hasNaturalWater,
+    riverAt,
+    riverPlanForCell,
+    SEA_LEVEL,
+    spawnPosition,
+    surfaceHeight,
+    terrainAt,
+    WORLD_MIN_Y
+} from "./terrain";
 import {getBlock} from "./chunks";
 
 describe("seeded terrain", () => {
@@ -59,8 +73,8 @@ describe("seeded terrain", () => {
                 if (current?.centerX !== elevated.centerX || current?.centerZ !== elevated.centerZ
                     || outward?.centerX !== elevated.centerX || outward?.centerZ !== elevated.centerZ) continue;
                 expect(Math.abs(current.rise - outward.rise)).toBeLessThanOrEqual(1);
-                const currentHeight = surfaceHeight(seed, Math.round(elevated.centerX + distance), centerZ);
-                const outwardHeight = surfaceHeight(seed, Math.round(elevated.centerX + distance + 1), centerZ);
+                const currentHeight = terrainAt(seed, Math.round(elevated.centerX + distance), centerZ).baseSurface;
+                const outwardHeight = terrainAt(seed, Math.round(elevated.centerX + distance + 1), centerZ).baseSurface;
                 expect(Math.abs(currentHeight - outwardHeight)).toBeLessThanOrEqual(1);
                 comparedSteps += 1;
             }
@@ -72,7 +86,59 @@ describe("seeded terrain", () => {
         const seed = "spawn";
         const [x, y, z] = spawnPosition(seed);
         expect(y).toBe(surfaceHeight(seed, x, z) + 2);
-        expect(hasLakeWater(seed, x, z)).toBe(false);
+        expect(hasNaturalWater(seed, x, z)).toBe(false);
+    });
+
+    test("carves moderately wide finite rivers whose ends exceed the maximum view diameter", () => {
+        const seed = "finite-rivers";
+        const plan = riverPlanForCell(seed, 0, 0);
+        expect(plan.length).toBeGreaterThanOrEqual(310);
+        expect(plan.length).toBeLessThanOrEqual(330);
+        expect(plan.width).toBeGreaterThanOrEqual(7);
+        expect(plan.width).toBeLessThanOrEqual(10.5);
+
+        const beforeStart = [
+            plan.points[0].x + (plan.points[0].x - plan.points[1].x) * 2,
+            plan.points[0].z + (plan.points[0].z - plan.points[1].z) * 2,
+        ];
+        const end = plan.points[plan.points.length - 1];
+        const beforeEnd = plan.points[plan.points.length - 2];
+        const afterEnd = [
+            end.x + (end.x - beforeEnd.x) * 2,
+            end.z + (end.z - beforeEnd.z) * 2,
+        ];
+        expect(riverAt(seed, ...beforeStart)).toBeNull();
+        expect(riverAt(seed, ...afterEnd)).toBeNull();
+
+        const midpoint = plan.points[Math.floor(plan.points.length / 2)];
+        let waterColumn = null;
+        for (let dx = -3; dx <= 3 && !waterColumn; dx += 1) for (let dz = -3; dz <= 3; dz += 1) {
+            const x = Math.round(midpoint.x + dx);
+            const z = Math.round(midpoint.z + dz);
+            if (riverAt(seed, x, z)) {
+                waterColumn = [x, z];
+                break;
+            }
+        }
+        expect(waterColumn).not.toBeNull();
+        const [x, z] = waterColumn;
+        const terrain = terrainAt(seed, x, z);
+        expect(terrain.baseSurface - terrain.surface).toBeGreaterThanOrEqual(1);
+        const chunks = generateChunkColumn(seed, Math.floor(x / 16), Math.floor(z / 16));
+        expect(getBlock(chunks, [x, terrain.surface + 1, z])).toBe("water");
+        expect(getBlock(chunks, [x, terrain.river.waterLevel, z])).toBe("water");
+
+        const spawn = spawnPosition(seed);
+        let visibleFromSpawn = false;
+        for (let dx = -32; dx <= 32 && !visibleFromSpawn; dx += 1) {
+            for (let dz = -32; dz <= 32; dz += 1) {
+                if (riverAt(seed, spawn[0] + dx, spawn[2] + dz)) {
+                    visibleFromSpawn = true;
+                    break;
+                }
+            }
+        }
+        expect(visibleFromSpawn).toBe(true);
     });
 
     test("generates sparse local lakes instead of filling every lowland", () => {

@@ -65,6 +65,6 @@ The game uses the source model's rigged idle animation while perched and blends 
 - **Downloaded:** 2026-10-11
 - **License:** Creative Commons Zero 1.0 Universal (CC0)
 - **Local path:** `src/images/assets/3dassets-aircraft/`
-- **Use:** A single rare, distant ambient airplane with an animated propeller
+- **Use:** Distant ambient airplanes with animated propellers
 
-The selected self-contained GLB is an unbranded in-flight model with 14,874 triangles. Only one airplane is rendered, and it follows a broad route around the player's area to keep the sky uncluttered.
+The selected self-contained GLB is an unbranded in-flight model with 14,874 triangles. Four instances follow broad independent routes around the player's area, with enough separation to keep the sky readable.

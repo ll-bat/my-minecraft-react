@@ -5,8 +5,11 @@ export const WORLD_MIN_Y = -16;
 export const WORLD_MAX_Y = 64;
 export const SEA_LEVEL = 6;
 const LAKE_CELL_SIZE = 32;
+const RIVER_CELL_SIZE = 384;
+const RIVER_SEGMENTS = 24;
 const HIGHLAND_CELL_SIZE = 240;
 const MAX_TERRAIN_HEIGHT = 50;
+const riverPlanCache = new Map();
 
 export const BIOMES = {
     PLAINS: "plains",
@@ -78,8 +81,7 @@ export function biomeAt(seed, x, z) {
     return elevated?.rise >= 4 ? elevated.biome : climateBiomeAt(seed, x, z, numericSeed);
 }
 
-export function terrainAt(seed, x, z) {
-    const numericSeed = seedToNumber(seed);
+function baseTerrainAt(seed, x, z, numericSeed = seedToNumber(seed)) {
     const climateBiome = climateBiomeAt(seed, x, z, numericSeed);
     const broad = fractalNoise2D(numericSeed + 4409, x, z, 75, 4);
     const detail = fractalNoise2D(numericSeed + 5503, x, z, 24, 3);
@@ -103,12 +105,113 @@ export function terrainAt(seed, x, z) {
     };
 }
 
+export function riverPlanForCell(seed, cellX, cellZ) {
+    const cacheKey = `${seed}:${cellX},${cellZ}`;
+    if (riverPlanCache.has(cacheKey)) return riverPlanCache.get(cacheKey);
+    const numericSeed = seedToNumber(`${seed}:rivers`);
+    const centerX = cellX * RIVER_CELL_SIZE
+        + (randomAt(numericSeed + 26003, cellX, 0, cellZ) - 0.5) * 10;
+    const centerZ = cellZ * RIVER_CELL_SIZE
+        + (randomAt(numericSeed + 27011, cellX, 0, cellZ) - 0.5) * 10;
+    const angle = randomAt(numericSeed + 28001, cellX, 0, cellZ) * Math.PI * 2;
+    const length = 310 + randomAt(numericSeed + 29009, cellX, 0, cellZ) * 20;
+    const halfWidth = 3.5 + randomAt(numericSeed + 30011, cellX, 0, cellZ) * 1.75;
+    const meander = 9 + randomAt(numericSeed + 31013, cellX, 0, cellZ) * 5;
+    const tangentX = Math.cos(angle);
+    const tangentZ = Math.sin(angle);
+    const normalX = -tangentZ;
+    const normalZ = tangentX;
+    const points = Array.from({length: RIVER_SEGMENTS + 1}, (_, index) => {
+        const t = index / RIVER_SEGMENTS;
+        const along = (t - 0.5) * length;
+        const bend = Math.sin(t * Math.PI * 2) * meander
+            + Math.sin(t * Math.PI * 4 + 0.7) * meander * 0.28;
+        return {
+            x: centerX + tangentX * along + normalX * bend,
+            z: centerZ + tangentZ * along + normalZ * bend,
+            t,
+        };
+    });
+    const plan = {
+        id: `${cellX},${cellZ}`,
+        cellX,
+        cellZ,
+        center: [centerX, centerZ],
+        length,
+        width: halfWidth * 2,
+        halfWidth,
+        points,
+        bounds: {
+            minX: Math.min(...points.map((point) => point.x)) - halfWidth,
+            maxX: Math.max(...points.map((point) => point.x)) + halfWidth,
+            minZ: Math.min(...points.map((point) => point.z)) - halfWidth,
+            maxZ: Math.max(...points.map((point) => point.z)) + halfWidth,
+        },
+    };
+    riverPlanCache.set(cacheKey, plan);
+    return plan;
+}
+
+function distanceToRiverSegmentSquared(x, z, start, end) {
+    const segmentX = end.x - start.x;
+    const segmentZ = end.z - start.z;
+    const lengthSquared = segmentX * segmentX + segmentZ * segmentZ;
+    const segmentProgress = lengthSquared === 0 ? 0 : clamp(
+        ((x - start.x) * segmentX + (z - start.z) * segmentZ) / lengthSquared,
+        0,
+        1
+    );
+    const nearestX = start.x + segmentX * segmentProgress;
+    const nearestZ = start.z + segmentZ * segmentProgress;
+    return {
+        distanceSquared: (x - nearestX) ** 2 + (z - nearestZ) ** 2,
+        t: start.t + (end.t - start.t) * segmentProgress,
+    };
+}
+
+export function riverAt(seed, x, z) {
+    const cellX = Math.floor((x + RIVER_CELL_SIZE / 2) / RIVER_CELL_SIZE);
+    const cellZ = Math.floor((z + RIVER_CELL_SIZE / 2) / RIVER_CELL_SIZE);
+    const plan = riverPlanForCell(seed, cellX, cellZ);
+    if (x < plan.bounds.minX || x > plan.bounds.maxX || z < plan.bounds.minZ || z > plan.bounds.maxZ) return null;
+    let closest = null;
+    for (let index = 0; index < plan.points.length - 1; index += 1) {
+        const candidate = distanceToRiverSegmentSquared(x, z, plan.points[index], plan.points[index + 1]);
+        if (!closest || candidate.distanceSquared < closest.distanceSquared) closest = candidate;
+    }
+    const endTaper = Math.min(1, 0.18 + closest.t * 6, 0.18 + (1 - closest.t) * 6);
+    const halfWidth = plan.halfWidth * endTaper;
+    if (closest.distanceSquared > halfWidth * halfWidth) return null;
+    const distance = Math.sqrt(closest.distanceSquared);
+    return {
+        id: plan.id,
+        progress: closest.t,
+        distance,
+        halfWidth,
+        depth: distance <= halfWidth * 0.62 ? 2 : 1,
+    };
+}
+
+export function terrainAt(seed, x, z) {
+    const numericSeed = seedToNumber(seed);
+    const base = baseTerrainAt(seed, x, z, numericSeed);
+    const river = riverAt(seed, x, z);
+    if (!river) return {...base, baseSurface: base.surface, river: null};
+    return {
+        ...base,
+        baseSurface: base.surface,
+        surface: Math.max(WORLD_MIN_Y + 4, base.surface - river.depth),
+        river: {...river, waterLevel: base.surface},
+    };
+}
+
 export function surfaceHeight(seed, x, z) {
     return terrainAt(seed, x, z).surface;
 }
 
-export function hasLakeWater(seed, x, z, surface = surfaceHeight(seed, x, z)) {
-    if (surface >= SEA_LEVEL) {
+export function hasLakeWater(seed, x, z, surface = null) {
+    const terrainSurface = surface ?? baseTerrainAt(seed, x, z).surface;
+    if (terrainSurface >= SEA_LEVEL) {
         return false;
     }
 
@@ -140,6 +243,15 @@ export function hasLakeWater(seed, x, z, surface = surfaceHeight(seed, x, z)) {
     }
 
     return false;
+}
+
+export function hasRiverWater(seed, x, z) {
+    return riverAt(seed, x, z) !== null;
+}
+
+export function hasNaturalWater(seed, x, z, surface = null) {
+    if (hasRiverWater(seed, x, z)) return true;
+    return hasLakeWater(seed, x, z, surface);
 }
 
 function isCave(numericSeed, x, y, z, surface) {
@@ -203,7 +315,7 @@ function addTreesAndPlants(chunks, seed, chunkX, chunkZ) {
         for (let originZ = minZ - 3; originZ <= maxZ + 3; originZ += 1) {
             const {biome, surface} = terrainAt(seed, originX, originZ);
 
-            if (hasLakeWater(seed, originX, originZ, surface)) {
+            if (hasNaturalWater(seed, originX, originZ, surface)) {
                 continue;
             }
 
@@ -263,8 +375,8 @@ export function generateChunkColumn(seed, chunkX, chunkZ) {
         for (let localZ = 0; localZ < CHUNK_SIZE; localZ += 1) {
             const x = minX + localX;
             const z = minZ + localZ;
-            const {biome, surface} = terrainAt(seed, x, z);
-            const lakeWater = hasLakeWater(seed, x, z, surface);
+            const {biome, surface, baseSurface, river} = terrainAt(seed, x, z);
+            const lakeWater = hasLakeWater(seed, x, z, baseSurface);
 
             for (let y = WORLD_MIN_Y; y <= surface; y += 1) {
                 let blockId;
@@ -272,7 +384,7 @@ export function generateChunkColumn(seed, chunkX, chunkZ) {
                     blockId = "bedrock";
                 } else if (isCave(numericSeed, x, y, z, surface)) {
                     continue;
-                } else if ((biome === BIOMES.DESERT || lakeWater) && y >= surface - 3) {
+                } else if ((biome === BIOMES.DESERT || lakeWater || river) && y >= surface - 3) {
                     blockId = "sand";
                 } else if (y === surface) {
                     blockId = biome === BIOMES.MOUNTAINS && surface >= 44
@@ -288,8 +400,9 @@ export function generateChunkColumn(seed, chunkX, chunkZ) {
                 putBlock(chunks, x, y, z, blockId);
             }
 
-            if (lakeWater) {
-                for (let y = surface + 1; y <= SEA_LEVEL; y += 1) {
+            if (lakeWater || river) {
+                const waterLevel = Math.max(lakeWater ? SEA_LEVEL : WORLD_MIN_Y, river?.waterLevel ?? WORLD_MIN_Y);
+                for (let y = surface + 1; y <= waterLevel; y += 1) {
                     putBlock(chunks, x, y, z, "water");
                 }
             }
@@ -320,7 +433,7 @@ export function spawnPosition(seed) {
                         }
                     }
                 }
-                if (biome !== BIOMES.MOUNTAINS && !hasLakeWater(seed, x, z, surface) && !treeNearby) {
+                if (biome !== BIOMES.MOUNTAINS && !hasNaturalWater(seed, x, z, surface) && !treeNearby) {
                     return [x, surface + 2, z];
                 }
             }

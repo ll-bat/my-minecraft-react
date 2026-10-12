@@ -11,6 +11,7 @@ describe("creative item categories", () => {
         expect(itemsInCategory("windows").map((item) => item.id)).toEqual(["window"]);
         expect(itemsInCategory("doors").map((item) => item.id)).toEqual(["door"]);
         expect(itemsInCategory("blocks").some((item) => item.id === "red_brick")).toBe(true);
+        expect(itemsInCategory("blocks").some((item) => item.id === "metal_fence")).toBe(true);
         expect(itemsInCategory("nature").some((item) => item.id === "cactus")).toBe(true);
         expect(itemsInCategory("fluids").map((item) => item.id)).toEqual(["water", "lava"]);
         expect(itemsInCategory("furniture").some((item) => item.id === "chair")).toBe(true);

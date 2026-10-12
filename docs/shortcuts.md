@@ -26,27 +26,32 @@
 
 | Shortcut | Action |
 | --- | --- |
-| **Left mouse button** | Place the selected block against the targeted face or use the selected placement item. |
+| **Left mouse button** | Place the selected block against the targeted face or use the selected placement item. When a pickaxe, axe, or shovel is selected, remove the targeted block, fluid, creature, or vehicle immediately instead. |
 | **Right mouse button — short click** | Use the targeted block. Opens crafting tables, furnaces, and chests; toggles doors, trapdoors, and switches; harvests mature crops; and rests in a bed at night. |
-| **Right mouse button — hold** | Break the targeted block. Matching tools break blocks faster and lose durability in survival. Bedrock cannot be broken. |
+| **Right mouse button — hold** | Break the targeted block. Matching tools break blocks faster and lose durability in survival. Bedrock and unsupported solid blocks with empty space directly below cannot be broken. |
 | **Place Wooden Door** | Places one coordinated structure two blocks high. Both halves open, close, and break together. Placement requires two empty vertical spaces. |
 | **Place Framed Window** | Places a one-block window with a solid wooden border and transparent central pane. |
 | **Place a slab or stair** | Clicking the upper half of a side or the underside of a block places an upper shape; other faces place a lower shape. Stairs face the camera direction. |
 | **Place a fence, wall, or railing** | Connects automatically to compatible neighboring solid blocks, including connections across chunk boundaries. |
 | **Place a beam** | Places the beam horizontally according to the camera direction. Posts remain vertical. |
 | **Place furniture or decorations** | Places the selected low-poly object in one voxel. Directional furniture faces the camera direction; rugs, rocks, plants, lamps, and wall decorations retain their specialized shape. |
+| **Wooden/Stone Bridge Builder — first left-click** | Select any visible face of a solid block as the bridge start. Bridge tools can target rendered terrain up to 64 blocks away. |
+| **Bridge Builder — move crosshair** | Preview the complete bridge. Green means the placement is valid; red marks an invalid endpoint or blocked route. |
+| **Bridge Builder — second left-click** | Build the complete bridge atomically between same-height endpoints. Bridges may run straight or diagonally, span 4–48 blocks, and require clear deck and railing space. Diagonal bridges follow a smooth block-grid approximation of the line between the selected points. |
+| **Bridge Builder — right-click or Escape** | Cancel the selected bridge start without changing the world. |
 | **Left mouse button with a hoe** | Till the top of a dirt or grass block into farmland. |
 | **Left mouse button with seeds** | Plant a crop on top of farmland. Crops grow when water is within four blocks. |
 | **Right mouse button on a mature crop** | Harvest wheat and seeds, then replant the crop automatically. |
 | **Right mouse button on a Dream Portal** | Travel between the Overworld and the peaceful Dream Grove. A return portal is created in a new destination. |
-| **Either mouse button on a creature** | Pet and befriend the creature. Friendly interactions show hearts and may provide a gift. |
+| **Either mouse button on a creature without a destructive tool selected** | Pet and befriend the creature. Friendly interactions show hearts and may provide a gift. |
 | **Click a villager** | Open dialogue with the named villager. View their profession, build friendship, complete a community task, or trade. |
-| **Click a horse, boat, or minecart** | Mount it. Horses can jump, boats travel smoothly across water, and minecarts move fastest on track. Press **Shift** to dismount. |
+| **Right-click a horse, rowboat, sailing ship, or minecart** | Mount it. Horses can jump, watercraft travel across connected water, and minecarts move fastest on track. Press **Shift** to dismount. |
 | **Right mouse button — short click on an elevator** | Travel to the next elevator platform directly above, wrapping to the lowest platform after the top floor. |
 
 Block interaction has a maximum reach of six world units. Placement is rejected when the target position is occupied, outside the build-height limits, or intersects the player.
+Mining is rejected when removing a solid block would expose empty space directly beneath it; the game displays a safety message instead.
 
-Creatures never cause damage and cannot be attacked. Befriended creatures follow calmly without entering the player's personal space.
+Creatures never cause damage. Left-clicking one with a pickaxe, axe, or shovel removes it immediately as a world-edit action; there is no combat, health-loss, or hostile response. Befriended creatures otherwise follow calmly without entering the player's personal space.
 
 ## Hotbar and inventory
 
@@ -60,9 +65,9 @@ Creatures never cause damage and cannot be attacked. Befriended creatures follow
 | **Right-click an inventory slot** | Take half a stack or place one held item. |
 | **Shift-click an inventory slot** | Move the stack between the hotbar and main inventory. |
 | **Drag an inventory stack** | Move or merge the stack into the destination slot. |
-| **Click an item in the category catalog** | Add a full stack of that item to an available inventory slot. Categories include Blocks, Windows, Doors, Utility, Nature, Fluids, Furniture, Decor, Outdoor, Materials, Tools, Creatures, and Transport. Water and Lava are in Fluids. |
+| **Click an item in the category catalog** | Add a full stack of that item to an available inventory slot. Categories include Blocks, Windows, Doors, Utility, Nature, Fluids, Furniture, Decor, Outdoor, Bridges, Materials, Tools, Creatures, and Transport. Water and Lava are in Fluids. |
 | **Carry or drag a stack to Trash** | Permanently remove that stack from the inventory. It can be added again later from the category catalog. |
-| **Left-click with a creature or transport item selected** | Place a persistent friendly creature, horse, boat, or minecart on top of the targeted block. |
+| **Left-click with a creature or transport item selected** | Place a persistent friendly creature, horse, or minecart on top of the targeted block. Rowboats and sailing ships must target water and float on its surface. |
 | **Left-click water with a fish item selected** | Release one blue, orange, or pink fish into that exact water block. Fish remain in connected water and swim independently. |
 | **Click a crafting output** | Craft the matched recipe into inventory and consume one set of ingredients. |
 | **Click furnace slots** | Insert smeltable input and fuel, or take completed output. |
@@ -76,9 +81,9 @@ These controls appear in the menu at the top of the game.
 | Control | Action |
 | --- | --- |
 | **Seed field** | Enter a numeric or text seed for deterministic world generation. The field does not change the active world until **New world** is selected. |
-| **New world** | Create fresh terrain from the seed field after confirmation. Unsaved world data is discarded. |
-| **Save** | Save terrain changes, inventory and crafting grids, tool durability, furnace and chest contents, block orientation and power, crop updates, world time, selected hotbar slot, and player position. |
-| **Regenerate** | Recreate the current seed's original terrain after confirmation, discarding unsaved block changes. |
+| **New world** | Permanently delete the current world's saved progress, replace it with fresh terrain from the Seed field, and immediately save the clean baseline. Other world slots remain untouched. |
+| **Save** | Save immediately. The game also saves persistent progress automatically every 2.5 seconds and when the page is hidden or refreshed. On startup, the active world is restored from localStorage. |
+| **Regenerate** | Permanently delete the current world's saved progress, recreate its original terrain from the same seed, and immediately save the clean baseline. Other world slots remain untouched. |
 | **Mode** | Switch between survival inventory rules and the creative item catalog. |
 | **View** | Change the streamed render distance from 1 (Low) through 4 (Ultra), 6 (Extra), or 9 (Extra 2x). Ultra remains the default. |
 | **Worlds** | Create, open, duplicate, export, import, or delete isolated worlds and configure current world rules. |

@@ -89,11 +89,14 @@ describe("friendly creatures", () => {
         expect(result.position[0]).toBe(0);
     });
 
-    test("boats float at the highest water surface instead of sinking to terrain", () => {
+    test.each([
+        ["boat", 16],
+        ["ship", 32],
+    ])("%s floats at the highest water surface instead of sinking to terrain", (type, health) => {
         let chunks = setBlock(new Map(), [0, 3, 0], "water");
         chunks = setBlock(chunks, [0, 4, 0], "water");
         const boat = {
-            ...creature, id: "boat:test", type: "boat", health: 16,
+            ...creature, id: `${type}:test`, type, health,
             position: [0, 1.5, 0], friendLevel: 1,
         };
         const result = updateCreature(boat, {seed: "friends", chunks, playerPosition: [0, 2, 1]}, 2000, 1);

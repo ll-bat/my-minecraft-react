@@ -11,9 +11,10 @@ import {
     spawnPosition,
     surfaceHeight,
     terrainAt,
+    upgradeNaturalWaterColumn,
     WORLD_MIN_Y
 } from "./terrain";
-import {getBlock} from "./chunks";
+import {getBlock, setBlock} from "./chunks";
 
 describe("seeded terrain", () => {
     test("is deterministic for the same seed", () => {
@@ -96,6 +97,9 @@ describe("seeded terrain", () => {
         expect(plan.length).toBeLessThanOrEqual(330);
         expect(plan.width).toBeGreaterThanOrEqual(7);
         expect(plan.width).toBeLessThanOrEqual(10.5);
+        plan.waterLevels.slice(1).forEach((level, index) => {
+            expect(level).toBeLessThanOrEqual(plan.waterLevels[index]);
+        });
 
         const beforeStart = [
             plan.points[0].x + (plan.points[0].x - plan.points[1].x) * 2,
@@ -128,6 +132,23 @@ describe("seeded terrain", () => {
         expect(getBlock(chunks, [x, terrain.surface + 1, z])).toBe("water");
         expect(getBlock(chunks, [x, terrain.river.waterLevel, z])).toBe("water");
 
+        let cutPoint = null;
+        plan.points.slice(1, -1).forEach((point) => {
+            const channel = terrainAt(seed, Math.round(point.x), Math.round(point.z));
+            if (!channel.river || channel.baseSurface <= channel.river.waterLevel) return;
+            cutPoint ??= [Math.round(point.x), Math.round(point.z), channel];
+            expect(channel.surface).toBe(channel.river.waterLevel - channel.river.depth);
+        });
+        expect(cutPoint).not.toBeNull();
+
+        const [cutX, cutZ, cutTerrain] = cutPoint;
+        const cutChunkX = Math.floor(cutX / 16);
+        const cutChunkZ = Math.floor(cutZ / 16);
+        let legacyChunks = generateChunkColumn(seed, cutChunkX, cutChunkZ);
+        legacyChunks = setBlock(legacyChunks, [cutX, cutTerrain.river.waterLevel + 1, cutZ], "water");
+        const upgraded = upgradeNaturalWaterColumn(legacyChunks, seed, cutChunkX, cutChunkZ);
+        expect(getBlock(upgraded, [cutX, cutTerrain.river.waterLevel + 1, cutZ])).toBeNull();
+
         const spawn = spawnPosition(seed);
         let visibleFromSpawn = false;
         for (let dx = -32; dx <= 32 && !visibleFromSpawn; dx += 1) {
@@ -141,47 +162,74 @@ describe("seeded terrain", () => {
         expect(visibleFromSpawn).toBe(true);
     });
 
-    test("generates sparse local lakes instead of filling every lowland", () => {
+    test("does not generate water in legacy lake locations", () => {
         const seed = "localized-lakes";
-        let lakeColumns = 0;
-        let dryLowlands = 0;
         let lakePosition = null;
-        let dryPosition = null;
 
-        for (let x = -96; x <= 96; x += 1) {
+        for (let x = -96; x <= 96 && !lakePosition; x += 1) {
             for (let z = -96; z <= 96; z += 1) {
                 if (surfaceHeight(seed, x, z) >= SEA_LEVEL) continue;
-                if (hasLakeWater(seed, x, z)) {
-                    lakeColumns += 1;
-                    lakePosition ??= [x, z];
-                } else {
-                    dryLowlands += 1;
-                    dryPosition ??= [x, z];
+                if (hasLakeWater(seed, x, z) && !riverAt(seed, x, z)) {
+                    lakePosition = [x, z];
+                    break;
                 }
             }
         }
 
-        expect(lakeColumns).toBeGreaterThan(0);
-        expect(dryLowlands).toBeGreaterThan(lakeColumns * 2);
+        expect(lakePosition).not.toBeNull();
+        const [x, z] = lakePosition;
+        const chunkX = Math.floor(x / 16);
+        const chunkZ = Math.floor(z / 16);
+        const chunks = generateChunkColumn(seed, chunkX, chunkZ);
+        expect(getBlock(chunks, [x, SEA_LEVEL, z])).not.toBe("water");
 
-        const blockAtWaterLevel = ([x, z]) => {
-            const chunks = generateChunkColumn(seed, Math.floor(x / 16), Math.floor(z / 16));
-            return getBlock(chunks, [x, SEA_LEVEL, z]);
-        };
-        expect(blockAtWaterLevel(lakePosition)).toBe("water");
-        expect(blockAtWaterLevel(dryPosition)).not.toBe("water");
+        const legacyChunks = setBlock(chunks, [x, SEA_LEVEL, z], "water");
+        const upgraded = upgradeNaturalWaterColumn(legacyChunks, seed, chunkX, chunkZ);
+        expect(getBlock(upgraded, [x, SEA_LEVEL, z])).toBeNull();
     });
 
-    test("keeps the default starting region mostly dry while retaining visible water", () => {
-        let waterColumns = 0;
-        const diameter = 65;
-        for (let x = -32; x <= 32; x += 1) {
-            for (let z = -32; z <= 32; z += 1) {
-                if (hasLakeWater("minecraft-react", x, z)) waterColumns += 1;
+    test("removes raised legacy ponds while preserving marked player-placed water", () => {
+        const seed = "raised-pond-cleanup";
+        let position = null;
+        for (let x = -32; x <= 32 && !position; x += 1) for (let z = -32; z <= 32; z += 1) {
+            const localX = ((x % 16) + 16) % 16;
+            if (localX < 15 && !riverAt(seed, x, z) && !riverAt(seed, x + 1, z) && !hasLakeWater(seed, x, z)) {
+                position = [x, z];
+                break;
             }
         }
-        expect(waterColumns).toBeGreaterThan(20);
-        expect(waterColumns).toBeLessThan(diameter * diameter * 0.15);
+        expect(position).not.toBeNull();
+
+        const [x, z] = position;
+        const chunkX = Math.floor(x / 16);
+        const chunkZ = Math.floor(z / 16);
+        let pond = generateChunkColumn(seed, chunkX, chunkZ);
+        pond = setBlock(pond, [x, 20, z], "water");
+        pond = setBlock(pond, [x + 1, 20, z], "water");
+
+        const cleaned = upgradeNaturalWaterColumn(pond, seed, chunkX, chunkZ);
+        expect(getBlock(cleaned, [x, 20, z])).toBeNull();
+        expect(getBlock(cleaned, [x + 1, 20, z])).toBeNull();
+
+        const placedFluids = new Map([[`${x},20,${z}`, 0], [`${x + 1},20,${z}`, 0]]);
+        const preserved = upgradeNaturalWaterColumn(pond, seed, chunkX, chunkZ, placedFluids);
+        expect(getBlock(preserved, [x, 20, z])).toBe("water");
+        expect(getBlock(preserved, [x + 1, 20, z])).toBe("water");
+    });
+
+    test("generates water only inside river paths", () => {
+        const seed = "minecraft-react";
+        const generated = new Map();
+        for (let x = -32; x <= 32; x += 1) {
+            for (let z = -32; z <= 32; z += 1) {
+                const key = `${Math.floor(x / 16)},${Math.floor(z / 16)}`;
+                if (!generated.has(key)) generated.set(key, generateChunkColumn(seed, Math.floor(x / 16), Math.floor(z / 16)));
+                const terrain = terrainAt(seed, x, z);
+                for (let y = terrain.surface + 1; y <= Math.max(SEA_LEVEL, terrain.baseSurface); y += 1) {
+                    if (getBlock(generated.get(key), [x, y, z]) === "water") expect(riverAt(seed, x, z)).not.toBeNull();
+                }
+            }
+        }
     });
 
     test("generates caves, ore veins, trees, and vegetation", () => {

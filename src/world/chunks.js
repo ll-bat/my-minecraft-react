@@ -78,6 +78,26 @@ export function setBlock(chunks, position, blockId) {
     return nextChunks;
 }
 
+export function setBlocks(chunks, entries) {
+    const nextChunks = new Map(chunks);
+    const changedChunks = new Map();
+    entries.forEach(({position, blockId}) => {
+        const location = locateBlock(position);
+        let chunk = changedChunks.get(location.chunkKey);
+        if (!chunk) {
+            chunk = new Map(nextChunks.get(location.chunkKey) ?? []);
+            changedChunks.set(location.chunkKey, chunk);
+        }
+        if (blockId === null) chunk.delete(location.index);
+        else chunk.set(location.index, blockId);
+    });
+    changedChunks.forEach((chunk, key) => {
+        if (chunk.size) nextChunks.set(key, chunk);
+        else nextChunks.delete(key);
+    });
+    return nextChunks;
+}
+
 export function affectedChunkKeys(position) {
     const {chunk, chunkKey: ownKey, local} = locateBlock(position);
     const keys = new Set([ownKey]);

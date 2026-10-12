@@ -8,10 +8,18 @@ import {
     getBlock,
     neighboringChunkKeys,
     parseChunkKey,
-    setBlock
+    setBlock,
+    setBlocks
 } from "../world/chunks";
-import {biomeAt, spawnPosition, WORLD_MAX_Y, WORLD_MIN_Y} from "../world/terrain";
-import {positionKey} from "../world/coordinates";
+import {
+    biomeAt,
+    NATURAL_WATER_VERSION,
+    spawnPosition,
+    upgradeNaturalWaterColumn,
+    WORLD_MAX_Y,
+    WORLD_MIN_Y
+} from "../world/terrain";
+import {blockIntersectsPlayer, positionKey} from "../world/coordinates";
 import {processFluidUpdate} from "../world/fluids";
 import {
     clearSavedWorld,
@@ -27,7 +35,7 @@ import {
     shiftMove,
     transferStack
 } from "../world/inventory";
-import {ITEM_BY_ID, isItemId} from "../world/items";
+import {isDestructiveTool, ITEM_BY_ID, isItemId} from "../world/items";
 import {consumeRecipe, findCraftingRecipe} from "../world/crafting";
 import {damageTool, miningDrop} from "../world/mining";
 import {advanceFurnace, createFurnace, FUEL_TIME, SMELTING_RECIPES} from "../world/furnaces";
@@ -54,6 +62,7 @@ import {worldCatalog} from "../world/worldStorage";
 import {registerDataPack, registerSavedPacks, saveDataPack} from "../world/dataPacks";
 import {generateTerrainColumnAsync} from "../world/terrainStreaming";
 import {addStructure, cityCenter, stadiumLocations, structureForColumn} from "../world/structures";
+import {bridgeEndpointError, planBridge} from "../world/bridges";
 
 export {WORLD_STORAGE_KEY};
 
@@ -116,10 +125,11 @@ function communityGroupForStructure(structure) {
 }
 
 function builtGroupForStructure(structure) {
-    if (structure?.type === "city") return `${structure.id}:${structure.districtX},${structure.districtZ}:built`;
+    if (structure?.type === "city") return `${structure.id}:${structure.districtX},${structure.districtZ}:built:${NATURAL_WATER_VERSION}`;
     if (structure?.type === "stadium") return structure.size === "grand"
         ? `${structure.id}:built:grand-v1`
         : `${structure.id}:built:large-v2`;
+    if (structure?.type === "hotel" || structure?.type === "well") return `${structure.id}:built:${NATURAL_WATER_VERSION}`;
     return null;
 }
 
@@ -258,6 +268,8 @@ function initialState() {
         soundEvent: null,
         particleEvent: null,
         activeChunkKeys: [],
+        collisionReadyChunkKeys: new Set(),
+        bridgeAnchor: null,
         playerPosition,
         playerChunk: [chunkCoordinate(playerPosition[0]), chunkCoordinate(playerPosition[2])],
         spawn: spawnPosition(seed),
@@ -356,8 +368,30 @@ export const useStore = create((set, get) => ({
                 const [chunkX, chunkZ] = columns[cursor];
                 cursor += 1;
                 const key = columnKey(chunkX, chunkZ);
-                const beforeGeneration = get();
+                let beforeGeneration = get();
                 if (beforeGeneration.generatedColumns.has(key)) {
+                    const naturalWaterUpgradeGroup = `${key}:${NATURAL_WATER_VERSION}`;
+                    if (generationIdentity.dimension === "overworld"
+                        && !beforeGeneration.spawnedCreatureGroups.has(naturalWaterUpgradeGroup)) {
+                        set((state) => ({
+                            chunks: upgradeNaturalWaterColumn(
+                                state.chunks,
+                                generationIdentity.seed,
+                                chunkX,
+                                chunkZ,
+                                state.fluidLevels
+                            ),
+                            spawnedCreatureGroups: new Set(state.spawnedCreatureGroups).add(naturalWaterUpgradeGroup),
+                            chunkRevisions: bumpRevisions(
+                                state.chunkRevisions,
+                                Array.from(state.chunks.keys()).filter((chunkKeyValue) => {
+                                    const [existingX, , existingZ] = parseChunkKey(chunkKeyValue);
+                                    return existingX === chunkX && existingZ === chunkZ;
+                                }).flatMap(neighboringChunkKeys)
+                            ),
+                        }));
+                        beforeGeneration = get();
+                    }
                     const existingStructure = generationIdentity.dimension === "overworld"
                         ? structureForColumn(generationIdentity.seed, chunkX, chunkZ, generationIdentity.dimension)
                         : null;
@@ -432,6 +466,9 @@ export const useStore = create((set, get) => ({
                         });
                         const creatureGroup = `${key}:day`;
                         const spawnedCreatureGroups = new Set(state.spawnedCreatureGroups);
+                        if (generationIdentity.dimension === "overworld") {
+                            spawnedCreatureGroups.add(`${key}:${NATURAL_WATER_VERSION}`);
+                        }
                         let entities = state.entities;
                         if (state.gameRules.creatures && !spawnedCreatureGroups.has(creatureGroup)) {
                             entities = [...entities, ...spawnCreaturesForColumn(
@@ -507,6 +544,7 @@ export const useStore = create((set, get) => ({
                 blockEntities.set(positionKey(position), createChest());
             }
             const definition = BLOCK_BY_ID[item.blockId];
+            if (definition?.fluid) fluidLevels.set(positionKey(position), 0);
             const usesHalf = definition?.shape === "slab" || definition?.shape === "stairs";
             if (definition?.oriented || usesHalf) {
                 blockStates.set(positionKey(position), {
@@ -540,6 +578,54 @@ export const useStore = create((set, get) => ({
                 ),
             };
         });
+        return true;
+    },
+
+    selectBridgeEndpoint: (position, style) => {
+        const endpoint = position.map(Math.round);
+        const state = get();
+        const endpointError = bridgeEndpointError(state.chunks, endpoint);
+        if (endpointError) {
+            set({interactionFeedback: endpointError});
+            return false;
+        }
+        if (!state.bridgeAnchor || state.bridgeAnchor.style !== style) {
+            set({
+                bridgeAnchor: {position: endpoint, style},
+                interactionFeedback: "Bridge start selected · aim at a level endpoint and click again",
+            });
+            return true;
+        }
+
+        const plan = planBridge(state.chunks, state.bridgeAnchor.position, endpoint, style);
+        if (!plan.ok) {
+            set({interactionFeedback: plan.error});
+            return false;
+        }
+        if (plan.placements.some(({position: planned}) => blockIntersectsPlayer(planned, state.playerPosition))) {
+            set({interactionFeedback: "Move away from the bridge path before building"});
+            return false;
+        }
+
+        const chunks = setBlocks(state.chunks, plan.placements);
+        const revisedKeys = Array.from(new Set(plan.placements.flatMap(({position: planned}) => affectedChunkKeys(planned))));
+        set({
+            chunks,
+            bridgeAnchor: null,
+            blockLight: rebuildBlockLight(chunks),
+            chunkRevisions: bumpRevisions(state.chunkRevisions, revisedKeys),
+            activeChunkKeys: activeKeys(chunks, state.playerChunk[0], state.playerChunk[1], state.renderDistance),
+            goals: {...state.goals, blocksPlaced: (state.goals.blocksPlaced ?? 0) + plan.placements.length},
+            soundEvent: {id: nanoid(), type: "place", blockId: plan.placements[0]?.blockId ?? "wood"},
+            particleEvent: {id: nanoid(), type: "place", position: endpoint},
+            interactionFeedback: `${plan.style === "stone" ? "Stone" : "Wooden"} bridge built · ${plan.length} blocks long`,
+        });
+        return true;
+    },
+
+    cancelBridge: () => {
+        if (!get().bridgeAnchor) return false;
+        set({bridgeAnchor: null, interactionFeedback: "Bridge placement cancelled"});
         return true;
     },
 
@@ -616,7 +702,59 @@ export const useStore = create((set, get) => ({
         return true;
     },
 
+    removeCubeSafely: (x, y, z) => {
+        const position = [Math.round(x), Math.round(y), Math.round(z)];
+        const state = get();
+        const blockId = getBlock(state.chunks, position);
+        const blockBelow = getBlock(state.chunks, [position[0], position[1] - 1, position[2]]);
+        if (BLOCK_BY_ID[blockId]?.solid && !BLOCK_BY_ID[blockBelow]?.solid) {
+            set({interactionFeedback: "That block has empty space below it and cannot be removed safely"});
+            return false;
+        }
+        return state.removeCube(...position);
+    },
+
+    destroyBlockWithSelectedTool: (x, y, z) => {
+        const state = get();
+        const stack = state.inventory[state.selectedHotbar];
+        if (!isDestructiveTool(stack ? ITEM_BY_ID[stack.itemId] : null)) return false;
+        return state.removeCubeSafely(x, y, z);
+    },
+
+    destroyEntityWithSelectedTool: (id) => {
+        const state = get();
+        const stack = state.inventory[state.selectedHotbar];
+        const tool = stack ? ITEM_BY_ID[stack.itemId] : null;
+        if (!isDestructiveTool(tool)) return false;
+        const entity = state.entities.find((candidate) => candidate.id === id);
+        if (!entity || Math.hypot(
+            entity.position[0] - state.playerPosition[0],
+            entity.position[1] - state.playerPosition[1],
+            entity.position[2] - state.playerPosition[2]
+        ) > 6) return false;
+        const inventory = state.gameMode === "survival"
+            ? damageTool(state.inventory, state.selectedHotbar)
+            : state.inventory;
+        set({
+            entities: state.entities.filter((candidate) => candidate.id !== id),
+            inventory,
+            ...(state.gameMode === "survival" ? {survivalInventory: inventory} : {}),
+            ...(state.mountedEntityId === id ? {mountedEntityId: null} : {}),
+            creatureFeedback: `${CREATURE_TYPES[entity.type]?.name ?? "Entity"} removed`,
+            soundEvent: {id: nanoid(), type: "break", blockId: entity.type},
+            particleEvent: {id: nanoid(), type: "break", position: entity.position},
+        });
+        return true;
+    },
+
     getBlock: (position) => getBlock(get().chunks, position),
+
+    markChunkCollisionReady: (token, ready) => set((state) => {
+        const collisionReadyChunkKeys = new Set(state.collisionReadyChunkKeys);
+        if (ready) collisionReadyChunkKeys.add(token);
+        else collisionReadyChunkKeys.delete(token);
+        return {collisionReadyChunkKeys};
+    }),
 
     processFluidStep: (allowLava = true) => {
         const result = processFluidUpdate(get(), allowLava);
@@ -652,7 +790,12 @@ export const useStore = create((set, get) => ({
     selectHotbar: (index) => {
         if (!Number.isInteger(index) || index < 0 || index >= 9) return;
         const stack = get().inventory[index];
-        set({selectedHotbar: index, ...(stack ? {texture: stack.itemId} : {})});
+        const bridgeStyle = stack ? ITEM_BY_ID[stack.itemId]?.bridgeStyle : null;
+        set((state) => ({
+            selectedHotbar: index,
+            ...(stack ? {texture: stack.itemId} : {}),
+            ...(!bridgeStyle || bridgeStyle !== state.bridgeAnchor?.style ? {bridgeAnchor: null} : {}),
+        }));
     },
 
     setInventory: (inventory) => set((state) => ({
@@ -794,16 +937,38 @@ export const useStore = create((set, get) => ({
         const item = stack ? ITEM_BY_ID[stack.itemId] : null;
         const targetId = getBlock(state.chunks, target);
         const requestedType = item?.creatureType ?? item?.vehicleType;
-        const aquaticPlacement = requestedType && CREATURE_TYPES[requestedType]?.aquatic && targetId === "water";
-        if (requestedType && (aquaticPlacement || (placement[1] > target[1] && !getBlock(state.chunks, placement)))) {
+        const requestedDefinition = requestedType ? CREATURE_TYPES[requestedType] : null;
+        const aquaticPlacement = requestedDefinition?.aquatic && targetId === "water";
+        const watercraftRadius = requestedDefinition?.placementRadius ?? 0;
+        const clearOfPlayer = Math.hypot(
+            target[0] - state.playerPosition[0],
+            target[2] - state.playerPosition[2]
+        ) >= watercraftRadius;
+        const clearOfWatercraft = state.entities.every((entity) => {
+            const definition = CREATURE_TYPES[entity.type];
+            if (!definition?.watercraft) return true;
+            return Math.hypot(target[0] - entity.position[0], target[2] - entity.position[2])
+                >= watercraftRadius + (definition.placementRadius ?? 0);
+        });
+        const watercraftPlacement = requestedDefinition?.watercraft && targetId === "water"
+            && clearOfPlayer && clearOfWatercraft;
+        if (requestedDefinition?.watercraft && targetId === "water" && !watercraftPlacement) {
+            set({creatureFeedback: `Place the ${requestedDefinition.name.toLowerCase()} a little farther away`});
+            return false;
+        }
+        const groundPlacement = requestedDefinition && !requestedDefinition.aquatic && !requestedDefinition.watercraft
+            && placement[1] > target[1] && !getBlock(state.chunks, placement);
+        if (requestedType && (aquaticPlacement || watercraftPlacement || groundPlacement)) {
             const type = requestedType;
             const entityPosition = aquaticPlacement
                 ? [target[0], target[1], target[2]]
-                : [placement[0], target[1] + (CREATURE_TYPES[type].groundOffset ?? 0.5), placement[2]];
+                : watercraftPlacement
+                    ? [target[0], target[1] + (requestedDefinition.groundOffset ?? 0.5), target[2]]
+                    : [placement[0], target[1] + (requestedDefinition.groundOffset ?? 0.5), placement[2]];
             const entity = {
                 id: `${type}:placed:${nanoid()}`, type,
                 position: entityPosition,
-                velocity: [0, 0, 0], health: CREATURE_TYPES[type].maxHealth,
+                velocity: [0, 0, 0], health: requestedDefinition.maxHealth,
                 animationState: "happy", heading: 0, friendLevel: 1, followUntil: item.creatureType ? Date.now() + 45000 : 0,
                 lastInteraction: Date.now(), lastGift: 0, persistent: true,
                 chunk: [chunkCoordinate(placement[0]), chunkCoordinate(placement[2])],
@@ -964,9 +1129,10 @@ export const useStore = create((set, get) => ({
         }
         if (CREATURE_TYPES[entity.type]?.rideable) {
             const mounting = state.mountedEntityId !== id;
+            const riderOffset = CREATURE_TYPES[entity.type].riderOffset ?? 0.55;
             set({
                 mountedEntityId: mounting ? id : null,
-                teleportRequest: mounting ? {id: nanoid(), position: [entity.position[0], entity.position[1] + 0.55, entity.position[2]]} : null,
+                teleportRequest: mounting ? {id: nanoid(), position: [entity.position[0], entity.position[1] + riderOffset, entity.position[2]]} : null,
                 creatureFeedback: mounting ? `Riding ${CREATURE_TYPES[entity.type].name} · Shift to dismount` : `Dismounted ${CREATURE_TYPES[entity.type].name}`,
             });
             return true;
@@ -1087,7 +1253,7 @@ export const useStore = create((set, get) => ({
         };
     }),
 
-    setPlayerPosition: (position) => {
+    setPlayerPosition: (position, heading = null) => {
         const playerChunk = [chunkCoordinate(position[0]), chunkCoordinate(position[2])];
         const previousChunk = get().playerChunk;
         const exploredColumns = new Set(get().exploredColumns);
@@ -1095,7 +1261,13 @@ export const useStore = create((set, get) => ({
         const discoveredBiomes = new Set(get().discoveredBiomes);
         discoveredBiomes.add(`${get().dimension}:${biomeAt(get().seed, position[0], position[2])}`);
         const entities = get().mountedEntityId ? get().entities.map((entity) => entity.id === get().mountedEntityId
-            ? {...entity, position: [position[0], position[1] - 0.55, position[2]], chunk: playerChunk, animationState: "walking"}
+            ? {
+                ...entity,
+                position: [position[0], position[1] - (CREATURE_TYPES[entity.type]?.riderOffset ?? 0.55), position[2]],
+                chunk: playerChunk,
+                animationState: "walking",
+                ...(Number.isFinite(heading) ? {heading} : {}),
+            }
             : entity) : get().entities;
         set({
             playerPosition: position,
@@ -1109,23 +1281,32 @@ export const useStore = create((set, get) => ({
         });
     },
 
-    saveWorld: () => {
+    saveWorld: (reason = "manual") => {
         try {
             writeWorld(get());
-            set({saveStatus: "World saved", worlds: worldCatalog()});
+            set({
+                saveStatus: reason === "auto" ? "Autosaved" : reason === "fresh" ? "Fresh world saved" : "World saved",
+                worlds: worldCatalog(),
+            });
+            return true;
         } catch {
             set({saveStatus: "World is too large for browser storage"});
+            return false;
         }
     },
 
-    createWorld: (requestedSeed, requestedName = "My World", requestedId = `world-${Date.now()}`) => {
+    createWorld: (requestedSeed, requestedName = null, requestedId = null) => {
+        const current = get();
+        const worldUid = requestedId ?? current.worldUid;
+        const worldName = String(requestedName ?? current.worldName).trim() || "My World";
         const seed = String(requestedSeed).trim() || DEFAULT_WORLD_SEED;
         const spawn = spawnPosition(seed);
         const generatedMarkers = generatedWorldMarkers(seed);
+        clearSavedWorld(worldUid);
         set((state) => ({
             seed,
-            worldUid: requestedId,
-            worldName: String(requestedName).trim() || "My World",
+            worldUid,
+            worldName,
             worldCreatedAt: Date.now(),
             texture: DEFAULT_BLOCK_ID,
             chunks: new Map(),
@@ -1171,18 +1352,19 @@ export const useStore = create((set, get) => ({
             soundEvent: null,
             particleEvent: null,
             activeChunkKeys: [],
+            collisionReadyChunkKeys: new Set(),
+            bridgeAnchor: null,
             playerPosition: spawn,
             playerChunk: [chunkCoordinate(spawn[0]), chunkCoordinate(spawn[2])],
             spawn,
             worldId: state.worldId + 1,
             saveStatus: "New world created",
         }));
-        if (requestedId === get().worldUid) clearSavedWorld();
+        get().saveWorld("fresh");
     },
 
     createManagedWorld: (name, seed) => {
         get().createWorld(seed, name, `world-${Date.now()}-${Math.floor(Math.random() * 10000)}`);
-        get().saveWorld();
     },
 
     toggleDebug: () => set((state) => ({debugOpen: !state.debugOpen})),
@@ -1232,6 +1414,8 @@ export const useStore = create((set, get) => ({
             playerChunk: [chunkCoordinate(playerPosition[0]), chunkCoordinate(playerPosition[2])],
             spawn: spawnPosition(targetSeed),
             chunkRevisions: new Map(), activeChunkKeys: [], blockLight: rebuildBlockLight(targetChunks),
+            collisionReadyChunkKeys: new Set(),
+            bridgeAnchor: null,
             worldId: state.worldId + 1,
             villagerPanelId: null,
             mountedEntityId: null,

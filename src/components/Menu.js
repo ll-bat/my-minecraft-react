@@ -19,13 +19,13 @@ export const Menu = () => {
     useEffect(() => setSeed(worldSeed), [worldSeed]);
 
     const handleReset = () => {
-        if (window.confirm(`Regenerate world "${worldSeed}"? Unsaved changes will be removed.`)) {
+        if (window.confirm(`Regenerate world "${worldSeed}"? All saved progress for this world will be permanently removed.`)) {
             resetWorld();
         }
     };
 
     const handleCreate = () => {
-        if (window.confirm(`Create a new world using seed "${seed || "minecraft-react"}"?`)) {
+        if (window.confirm(`Create a new world using seed "${seed || "minecraft-react"}"? All saved progress for the current world will be permanently removed.`)) {
             createWorld(seed);
         }
     };

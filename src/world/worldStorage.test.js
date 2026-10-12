@@ -1,7 +1,7 @@
 jest.mock("nanoid", () => ({nanoid: () => "test-id"}));
 
 import {getBlock} from "./chunks";
-import {parseWorldDocument, serializeWorld} from "./worldStorage";
+import {parseWorldDocument, serializeWorld, WORLD_VERSION} from "./worldStorage";
 import {emptyInventory} from "./inventory";
 import {createFurnace} from "./furnaces";
 import {createChest, scheduleCrop} from "./interactions";
@@ -51,6 +51,38 @@ describe("world storage", () => {
         expect(parsed.entities[0].friendLevel).toBe(2);
         expect(parsed.spawnedCreatureGroups.has("0,0:day")).toBe(true);
         expect(parsed.renderDistance).toBe(4);
+    });
+
+    test("compacts repeated chunk blocks with a palette and runs", () => {
+        const chunk = new Map();
+        for (let index = 0; index < 4096; index += 1) {
+            chunk.set(index, index < 2048 ? "stone" : "dirt");
+        }
+        const state = {
+            seed: "compact", texture: "dirt", playerPosition: [0, 2, 0], generatedColumns: new Set(),
+            fluidLevels: new Map(), inventory: emptyInventory(), survivalInventory: emptyInventory(), selectedHotbar: 0,
+            gameMode: "survival", drops: [], playerCrafting: Array(4).fill(null), tableCrafting: Array(9).fill(null),
+            blockEntities: new Map(), blockStates: new Map(), scheduledUpdates: [], worldTime: 0,
+            entities: [], spawnedCreatureGroups: new Set(), chunks: new Map([["0,0,0", chunk]]),
+        };
+
+        const serialized = serializeWorld(state);
+        const document = JSON.parse(serialized);
+        const legacySize = JSON.stringify([["0,0,0", Array.from(chunk)]]).length;
+        expect(document.version).toBe(WORLD_VERSION);
+        expect(document.chunks[0]).toEqual(["0,0,0", ["stone", "dirt"], [0, 2048, 0, 2048, 2048, 1]]);
+        expect(serialized.length).toBeLessThan(legacySize / 20);
+        expect(parseWorldDocument(serialized).chunks.get("0,0,0").size).toBe(4096);
+    });
+
+    test("still loads version 8 entry-based chunks", () => {
+        const parsed = parseWorldDocument(JSON.stringify({
+            version: 8,
+            seed: "old chunks",
+            texture: "dirt",
+            chunks: [["0,0,0", [[0, "stone"], [15, "dirt"]]]],
+        }));
+        expect(parsed.chunks.get("0,0,0")).toEqual(new Map([[0, "stone"], [15, "dirt"]]));
     });
 
     test("round-trips chest contents and revision", () => {
@@ -104,7 +136,7 @@ describe("world storage", () => {
             chunks: [],
         }));
         const current = parseWorldDocument(JSON.stringify({
-            version: 8,
+            version: WORLD_VERSION,
             seed: "current-choice",
             texture: "dirt",
             renderDistance: 2,
@@ -117,7 +149,7 @@ describe("world storage", () => {
 
     test("persists the optional Extra view distance", () => {
         const parsed = parseWorldDocument(JSON.stringify({
-            version: 8,
+            version: WORLD_VERSION,
             seed: "extra-view",
             texture: "dirt",
             renderDistance: 6,

@@ -9,7 +9,8 @@ export const CREATURE_TYPES = {
     glow_sprite: {name: "Glow Sprite", maxHealth: 12, color: "#ffe66d", gift: "coal", groundOffset: 0.275},
     villager: {name: "Villager", maxHealth: 20, color: "#b8794b", gift: "wheat", groundOffset: 0.9},
     horse: {name: "Horse", maxHealth: 24, color: "#845337", gift: "wheat", groundOffset: 0.9, rideable: true},
-    boat: {name: "Boat", maxHealth: 16, color: "#a66b35", gift: null, groundOffset: 0.5, rideable: true},
+    boat: {name: "Rowboat", maxHealth: 16, color: "#d77b4a", gift: null, groundOffset: 0.5, riderOffset: 0.8, rideSpeed: 6, placementRadius: 1.75, rideable: true, watercraft: true},
+    ship: {name: "Sailing Ship", maxHealth: 32, color: "#8f4938", gift: null, groundOffset: 0.5, riderOffset: 1.55, rideSpeed: 5, placementRadius: 3, rideable: true, watercraft: true},
     minecart: {name: "Minecart", maxHealth: 20, color: "#8b9298", gift: null, groundOffset: 0.625, rideable: true},
     fish_blue: {name: "Blue Reef Fish", maxHealth: 6, color: "#4597da", gift: null, groundOffset: 0, aquatic: true},
     fish_orange: {name: "Sunset Fish", maxHealth: 6, color: "#f28a32", gift: null, groundOffset: 0, aquatic: true},
@@ -192,7 +193,7 @@ function blocked(state, entity, x, z) {
 
 export function updateCreature(entity, state, now, deltaSeconds) {
     if (state.mountedEntityId === entity.id) return entity;
-    if (entity.type === "boat") {
+    if (CREATURE_TYPES[entity.type]?.watercraft) {
         const x = Math.round(entity.position[0]);
         const z = Math.round(entity.position[2]);
         const centerY = Math.floor(entity.position[1]);
@@ -202,7 +203,7 @@ export function updateCreature(entity, state, now, deltaSeconds) {
         }
         return {
             ...entity,
-            position: [entity.position[0], waterSurface === null ? entity.position[1] : waterSurface + CREATURE_TYPES.boat.groundOffset, entity.position[2]],
+            position: [entity.position[0], waterSurface === null ? entity.position[1] : waterSurface + CREATURE_TYPES[entity.type].groundOffset, entity.position[2]],
             velocity: [0, 0, 0],
             animationState: now - entity.lastInteraction < 1200 ? "happy" : "idle",
         };

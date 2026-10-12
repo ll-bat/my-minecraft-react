@@ -9,6 +9,7 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageOps
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "src/images/assets/kenney-voxel-pack"
 FISH_ASSETS = ROOT / "src/images/assets/kenney-fish-pack"
+WATERCRAFT_ASSETS = ROOT / "src/images/assets/kenney-watercraft-kit"
 SOURCE, ITEM_SOURCE = ASSETS / "tiles", ASSETS / "items"
 GAME = ROOT / "src/images/game"
 BLOCKS, ITEMS, ATLASES = GAME / "blocks", GAME / "items", GAME / "atlases"
@@ -72,6 +73,10 @@ FISH_ITEMS = {
     "spawn_fish_blue": "fish_blue.png",
     "spawn_fish_orange": "fish_orange.png",
     "spawn_fish_pink": "fish_pink.png",
+}
+WATERCRAFT_ITEMS = {
+    "spawn_boat": "boat-row-large.png",
+    "spawn_ship": "ship-small.png",
 }
 
 
@@ -222,11 +227,15 @@ def main():
     for name, source_name in sorted(FISH_ITEMS.items()):
         image = Image.open(FISH_ASSETS / source_name).convert("RGBA").resize((SOURCE_SIZE, SOURCE_SIZE), Image.Resampling.NEAREST)
         image.save(ITEMS / f"{name}.png", optimize=True); item_entries.append((name, image)); item_manifest.append({"id": name, "source": f"src/images/assets/kenney-fish-pack/{source_name}", "output": f"src/images/game/items/{name}.png", "modification": "copied and packed into shared item atlas", "license": "CC0-1.0", "author": "Kenney"})
+    for name, source_name in sorted(WATERCRAFT_ITEMS.items()):
+        image = Image.open(WATERCRAFT_ASSETS / source_name).convert("RGBA").resize((SOURCE_SIZE, SOURCE_SIZE), Image.Resampling.LANCZOS)
+        image.save(ITEMS / f"{name}.png", optimize=True); item_entries.append((name, image)); item_manifest.append({"id": name, "source": f"src/images/assets/kenney-watercraft-kit/{source_name}", "output": f"src/images/game/items/{name}.png", "modification": "copied and packed into shared item atlas", "license": "CC0-1.0", "author": "Kenney"})
     for path in sorted(MODEL_PREVIEWS.glob("*.png")):
         name = f"model_{path.stem}"; image = Image.open(path).convert("RGBA").resize((SOURCE_SIZE, SOURCE_SIZE), Image.Resampling.NEAREST)
         image.save(ITEMS / f"{name}.png", optimize=True); item_entries.append((name, image)); item_manifest.append({"id": name, "source": f"src/images/game/models/previews/{path.name}", "output": f"src/images/game/items/{name}.png", "modification": "rendered from project glTF cuboids"})
     model_entries = [{"id": f"model:{name}", "source": "project-generated", "output": f"src/images/game/models/{name}.gltf", "assetType": "model", "modification": "original scripted low-poly model"} for name in json.loads((GAME / "models/models.json").read_text())["models"]]
-    write_item_atlas(sorted(item_entries)); (GAME / "manifest.json").write_text(json.dumps({"version": 3, "source": "https://kenney.nl/assets/voxel-pack", "license": "CC0-1.0", "entries": manifest_entries + item_manifest + model_entries}, indent=2, sort_keys=True) + "\n")
+    watercraft_entries = [{"id": f"vehicle:{name.removesuffix('.glb')}", "source": f"src/images/assets/kenney-watercraft-kit/{name}", "output": f"src/images/game/vehicles/{name}", "assetType": "model", "modification": "embedded the supplied CC0 colormap into a self-contained GLB", "license": "CC0-1.0", "author": "Kenney"} for name in ("boat-row-large.glb", "ship-small.glb")]
+    write_item_atlas(sorted(item_entries)); (GAME / "manifest.json").write_text(json.dumps({"version": 3, "source": "https://kenney.nl/assets/voxel-pack", "license": "CC0-1.0", "entries": manifest_entries + item_manifest + model_entries + watercraft_entries}, indent=2, sort_keys=True) + "\n")
     print(f"Built {sum(map(len, layers.values()))} block textures in {len(layers)} atlases and {len(item_entries)} item icons")
 
 

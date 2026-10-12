@@ -36,7 +36,8 @@ const CREATURE_ITEMS = [
 
 const TRANSPORT_ITEMS = [
     {id: "spawn_horse", name: "Friendly Horse", maxStack: 64, vehicleType: "horse", uiColor: "#845337"},
-    {id: "spawn_boat", name: "Wooden Boat", maxStack: 64, vehicleType: "boat", uiColor: "#a66b35"},
+    {id: "spawn_boat", name: "Rowboat", maxStack: 64, vehicleType: "boat", uiColor: "#d77b4a"},
+    {id: "spawn_ship", name: "Sailing Ship", maxStack: 64, vehicleType: "ship", uiColor: "#8f4938"},
     {id: "spawn_minecart", name: "Minecart", maxStack: 64, vehicleType: "minecart", uiColor: "#8b9298"},
 ].map((item) => ({...item, artwork: itemArtwork(item.id)}));
 
@@ -50,7 +51,12 @@ const TOOL_ITEMS = [
     {id: "wooden_hoe", name: "Wooden Hoe", toolType: "hoe", tier: 1, speed: 1, maxDurability: 40, uiColor: "#a97742"},
 ].map((item) => ({...item, maxStack: 1, artwork: itemArtwork(item.id)}));
 
-export const ITEMS = [...BLOCK_ITEMS, ...MATERIAL_ITEMS, ...TOOL_ITEMS, ...CREATURE_ITEMS, ...TRANSPORT_ITEMS];
+const BRIDGE_ITEMS = [
+    {id: "wood_bridge_builder", name: "Wooden Bridge Builder", maxStack: 1, bridgeStyle: "wood", previewBlockId: "wood_railing", uiColor: "#a86535"},
+    {id: "stone_bridge_builder", name: "Stone Bridge Builder", maxStack: 1, bridgeStyle: "stone", previewBlockId: "stone_wall", uiColor: "#7e8589"},
+];
+
+export const ITEMS = [...BLOCK_ITEMS, ...MATERIAL_ITEMS, ...TOOL_ITEMS, ...BRIDGE_ITEMS, ...CREATURE_ITEMS, ...TRANSPORT_ITEMS];
 
 export const ITEM_BY_ID = Object.fromEntries(ITEMS.map((item) => [item.id, item]));
 
@@ -58,14 +64,19 @@ export function isItemId(value) {
     return Object.prototype.hasOwnProperty.call(ITEM_BY_ID, value);
 }
 
+export function isDestructiveTool(item) {
+    return ["pickaxe", "axe", "shovel"].includes(item?.toolType);
+}
+
 const UTILITY_BLOCKS = new Set(["crafting_table", "furnace", "chest", "door", "trapdoor", "ladder", "bed", "torch", "lantern", "switch", "lamp", "farmland", "portal", "enchanting_table", "elevator"]);
 const FLUID_BLOCKS = new Set(["water", "lava"]);
 const NATURE_BLOCKS = new Set(["grass", "dirt", "sand", "gravel", "snow", "ice", "log", "pale_log", "leaves", "tall_grass", "flower", "cactus", "coal_ore", "iron_ore", "copper_ore", "gold_ore", "crystal_ore"]);
 
-export const ITEM_CATEGORY_ORDER = ["blocks", "windows", "doors", "utility", "nature", "fluids", "furniture", "decor", "outdoor", "materials", "tools", "creatures", "transport"];
-export const ITEM_CATEGORY_NAMES = {blocks: "Blocks", windows: "Windows", doors: "Doors", utility: "Utility", nature: "Nature", fluids: "Fluids", furniture: "Furniture", decor: "Decor", outdoor: "Outdoor", materials: "Materials", tools: "Tools", creatures: "Creatures", transport: "Transport"};
+export const ITEM_CATEGORY_ORDER = ["blocks", "windows", "doors", "utility", "nature", "fluids", "furniture", "decor", "outdoor", "bridges", "materials", "tools", "creatures", "transport"];
+export const ITEM_CATEGORY_NAMES = {blocks: "Blocks", windows: "Windows", doors: "Doors", utility: "Utility", nature: "Nature", fluids: "Fluids", furniture: "Furniture", decor: "Decor", outdoor: "Outdoor", bridges: "Bridges", materials: "Materials", tools: "Tools", creatures: "Creatures", transport: "Transport"};
 
 export function itemCategory(item) {
+    if (item.bridgeStyle) return "bridges";
     if (item.vehicleType) return "transport";
     if (item.creatureType) return "creatures";
     if (item.toolType) return "tools";

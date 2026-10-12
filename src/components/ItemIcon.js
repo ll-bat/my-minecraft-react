@@ -109,15 +109,15 @@ const TransportPreview = ({type}) => (
 export const ItemIcon = ({itemId, count, durability, className = ""}) => {
     const item = ITEM_BY_ID[itemId];
     if (!item) return null;
-    const block = item.blockId ? BLOCK_BY_ID[item.blockId] : null;
+    const block = item.blockId ? BLOCK_BY_ID[item.blockId] : item.previewBlockId ? BLOCK_BY_ID[item.previewBlockId] : null;
     return (
         <span className={`item-icon ${className}`} title={item.name}>
             {block
                 ? <BlockPreview block={block}/>
-                : item.vehicleType
-                    ? <TransportPreview type={item.vehicleType}/>
                 : item.artwork
                     ? <span className="item-artwork"><AtlasPreview preview={item.artwork}/></span>
+                : item.vehicleType
+                    ? <TransportPreview type={item.vehicleType}/>
                     : <span className="item-swatch" style={{background: item.uiColor ?? "#777"}} />
             }
             {count > 1 && <span className="item-count">{count}</span>}

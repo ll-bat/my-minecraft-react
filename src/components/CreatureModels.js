@@ -5,6 +5,8 @@ import {AnimationClip, sRGBEncoding, TextureLoader} from "three";
 import {FBXLoader} from "three/examples/jsm/loaders/FBXLoader";
 import {clone as cloneSkeleton} from "three/examples/jsm/utils/SkeletonUtils";
 import horseModel from "../images/game/creatures/horse.glb";
+import boatModel from "../images/game/vehicles/boat-row-large.glb";
+import shipModel from "../images/game/vehicles/ship-small.glb";
 import humanModel from "../images/assets/kenney-animated-characters-retro/human.fbx";
 import humanIdleModel from "../images/assets/kenney-animated-characters-retro/human-idle.fbx";
 import humanRunModel from "../images/assets/kenney-animated-characters-retro/human-run.fbx";
@@ -116,4 +118,18 @@ export const HumanModel = ({entity, walking}) => {
     </group>;
 };
 
+export const WatercraftModel = ({type}) => {
+    const source = useGLTF(type === "ship" ? shipModel : boatModel);
+    const scene = useMemo(() => source.scene.clone(true), [source.scene]);
+    return <group
+        position={type === "ship" ? [0, 0, 0] : [0, 0.02, 0]}
+        rotation={[0, type === "ship" ? Math.PI : 0, 0]}
+        scale={type === "ship" ? 0.45 : 0.9}
+    >
+        <primitive object={scene}/>
+    </group>;
+};
+
 useGLTF.preload(horseModel);
+useGLTF.preload(boatModel);
+useGLTF.preload(shipModel);

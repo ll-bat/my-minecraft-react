@@ -5,6 +5,7 @@ import {getBlock, setBlock} from "../world/chunks";
 import {emptyInventory} from "../world/inventory";
 import {cityForColumn, stadiumCenter, stadiumCenters, structureForColumn} from "../world/structures";
 import {generateChunkColumn} from "../world/terrain";
+import {worldDocumentKey} from "../world/worldCatalog";
 
 describe("world store", () => {
     beforeEach(() => {
@@ -78,9 +79,45 @@ describe("world store", () => {
         useStore.getState().addCube(1, 2, 3);
         useStore.getState().saveWorld();
 
-        const saved = JSON.parse(window.localStorage.getItem(WORLD_STORAGE_KEY));
-        expect(saved.version).toBe(8);
+        const saved = JSON.parse(window.localStorage.getItem(worldDocumentKey(useStore.getState().worldUid)));
+        expect(saved.version).toBe(9);
         expect(saved.chunks).toHaveLength(1);
+        expect(window.localStorage.getItem(WORLD_STORAGE_KEY)).toBeNull();
+    });
+
+    test("new world removes old saved progress and immediately stores a fresh baseline", () => {
+        useStore.setState({
+            worldUid: "replace-current",
+            worldName: "Replace Current",
+            seed: "old-seed",
+            chunks: setBlock(new Map(), [1, 2, 3], "stone"),
+        });
+        useStore.getState().saveWorld();
+
+        useStore.getState().createWorld("new-seed");
+
+        const saved = JSON.parse(window.localStorage.getItem(worldDocumentKey("replace-current")));
+        expect(saved.seed).toBe("new-seed");
+        expect(saved.chunks).toEqual([]);
+        expect(useStore.getState().worldUid).toBe("replace-current");
+        expect(useStore.getState().saveStatus).toBe("Fresh world saved");
+    });
+
+    test("regenerate removes saved edits and recreates the same seed", () => {
+        useStore.setState({
+            worldUid: "regenerate-current",
+            worldName: "Regenerate Current",
+            seed: "same-seed",
+            chunks: setBlock(new Map(), [4, 5, 6], "wood"),
+        });
+        useStore.getState().saveWorld();
+
+        useStore.getState().resetWorld();
+
+        const saved = JSON.parse(window.localStorage.getItem(worldDocumentKey("regenerate-current")));
+        expect(saved.seed).toBe("same-seed");
+        expect(saved.chunks).toEqual([]);
+        expect(useStore.getState().playerPosition).toEqual(useStore.getState().spawn);
     });
 
     test("generates and activates the requested chunk columns", async () => {
@@ -108,9 +145,9 @@ describe("world store", () => {
         });
         await useStore.getState().ensureColumns(city.chunkX, city.chunkZ, 0);
         const ids = Array.from(useStore.getState().chunks.values()).flatMap((chunk) => Array.from(chunk.values()));
-        expect(ids).toContain("water");
+        expect(ids).not.toContain("water");
         expect(ids).toContain("sign");
-        expect(useStore.getState().spawnedCreatureGroups.has(`${city.id}:0,0:built`)).toBe(true);
+        expect(useStore.getState().spawnedCreatureGroups.has(`${city.id}:0,0:built:river-only-v4`)).toBe(true);
         expect(useStore.getState().discoveredStructures.filter((structure) => structure.id === city.id)).toHaveLength(1);
     });
 
@@ -187,6 +224,7 @@ describe("world store", () => {
         useStore.getState().addCube(0, 2, 0);
 
         expect(useStore.getState().fluidQueue).toHaveLength(0);
+        expect(useStore.getState().fluidLevels.get("0,2,0")).toBe(0);
         useStore.getState().processFluidStep();
         expect(getBlock(useStore.getState().chunks, [0, 2, 0])).toBe("water");
         expect(getBlock(useStore.getState().chunks, [1, 2, 0])).toBeNull();
@@ -202,6 +240,66 @@ describe("world store", () => {
         expect(useStore.getState().inventory[0].count).toBe(count);
         expect(useStore.getState().removeCube(0, 1, 0)).toBe(true);
         expect(useStore.getState().drops).toHaveLength(0);
+    });
+
+    test("uses a selected destructive tool to remove water and entities with left-click actions", () => {
+        const inventory = emptyInventory();
+        inventory[0] = {itemId: "wooden_axe", count: 1, durability: 30};
+        const ship = {
+            id: "ship:remove", type: "ship", position: [1, 2, 0], velocity: [0, 0, 0], health: 32,
+            animationState: "idle", heading: 0, friendLevel: 1, followUntil: 0,
+            lastInteraction: 0, lastGift: 0, persistent: true, chunk: [0, 0],
+        };
+        useStore.setState({
+            inventory, survivalInventory: inventory, selectedHotbar: 0,
+            chunks: setBlock(new Map(), [0, 1, 0], "water"), entities: [ship],
+            playerPosition: [0, 2, 0], mountedEntityId: ship.id,
+        });
+
+        expect(useStore.getState().destroyBlockWithSelectedTool(0, 1, 0)).toBe(true);
+        expect(getBlock(useStore.getState().chunks, [0, 1, 0])).toBeNull();
+        expect(useStore.getState().inventory[0].durability).toBe(29);
+        expect(useStore.getState().destroyEntityWithSelectedTool(ship.id)).toBe(true);
+        expect(useStore.getState().entities).toHaveLength(0);
+        expect(useStore.getState().mountedEntityId).toBeNull();
+        expect(useStore.getState().inventory[0].durability).toBe(28);
+    });
+
+    test("prevents player mining from opening an unsupported void", () => {
+        const inventory = emptyInventory();
+        inventory[0] = {itemId: "wooden_pickaxe", count: 1, durability: 30};
+        useStore.setState({
+            inventory, survivalInventory: inventory, selectedHotbar: 0,
+            chunks: setBlock(new Map(), [0, 2, 0], "stone"),
+            interactionFeedback: "",
+        });
+
+        expect(useStore.getState().removeCubeSafely(0, 2, 0)).toBe(false);
+        expect(getBlock(useStore.getState().chunks, [0, 2, 0])).toBe("stone");
+        expect(useStore.getState().interactionFeedback).toContain("empty space below");
+
+        useStore.setState({chunks: setBlock(useStore.getState().chunks, [0, 1, 0], "stone")});
+        expect(useStore.getState().removeCubeSafely(0, 2, 0)).toBe(true);
+        expect(getBlock(useStore.getState().chunks, [0, 2, 0])).toBeNull();
+    });
+
+    test("builds a selected two-point bridge atomically", () => {
+        let chunks = setBlock(new Map(), [0, 5, 0], "stone");
+        chunks = setBlock(chunks, [8, 5, 0], "stone");
+        useStore.setState({
+            chunks,
+            playerPosition: [0, 20, 10],
+            bridgeAnchor: null,
+            interactionFeedback: "",
+        });
+
+        expect(useStore.getState().selectBridgeEndpoint([0, 5, 0], "wood")).toBe(true);
+        expect(useStore.getState().bridgeAnchor).toEqual({position: [0, 5, 0], style: "wood"});
+        expect(useStore.getState().selectBridgeEndpoint([8, 5, 0], "wood")).toBe(true);
+        expect(useStore.getState().bridgeAnchor).toBeNull();
+        expect(getBlock(useStore.getState().chunks, [4, 5, 0])).toBe("red_wood");
+        expect(getBlock(useStore.getState().chunks, [4, 6, 1])).toBe("wood_railing");
+        expect(useStore.getState().interactionFeedback).toContain("bridge built");
     });
 
     test("removes an inventory stack and restores it from the catalog", () => {
@@ -239,6 +337,33 @@ describe("world store", () => {
         expect(useStore.getState().mountedEntityId).toBe(horse.id);
         useStore.getState().dismount();
         expect(useStore.getState().mountedEntityId).toBeNull();
+    });
+
+    test("places and mounts a sailing ship only on water", () => {
+        const inventory = emptyInventory();
+        inventory[0] = {itemId: "spawn_ship", count: 64};
+        let chunks = setBlock(new Map(), [0, 1, 0], "grass");
+        chunks = setBlock(chunks, [3, 5, 4], "water");
+        useStore.setState({inventory, survivalInventory: inventory, selectedHotbar: 0, chunks, entities: [], playerPosition: [3, 6, 8]});
+
+        expect(useStore.getState().applySelectedItemToBlock([0, 1, 0], [0, 2, 0])).toBe(false);
+        expect(useStore.getState().applySelectedItemToBlock([3, 5, 4], [3, 6, 4])).toBe(true);
+        const ship = useStore.getState().entities[0];
+        expect(ship).toMatchObject({type: "ship", position: [3, 5.5, 4], persistent: true});
+        expect(useStore.getState().interactCreature(ship.id)).toBe(true);
+        expect(useStore.getState().mountedEntityId).toBe(ship.id);
+        expect(useStore.getState().teleportRequest.position).toEqual([3, 7.05, 4]);
+    });
+
+    test("rejects watercraft placement close enough for its collider to push the player underwater", () => {
+        const inventory = emptyInventory();
+        inventory[0] = {itemId: "spawn_boat", count: 64};
+        const chunks = setBlock(new Map(), [0, 5, 0], "water");
+        useStore.setState({inventory, survivalInventory: inventory, selectedHotbar: 0, chunks, entities: [], playerPosition: [0, 6, 1]});
+
+        expect(useStore.getState().applySelectedItemToBlock([0, 5, 0], [0, 6, 0])).toBe(false);
+        expect(useStore.getState().entities).toHaveLength(0);
+        expect(useStore.getState().creatureFeedback).toMatch(/farther away/);
     });
 
     test("opens villager dialogue and completes a friendly trade", () => {

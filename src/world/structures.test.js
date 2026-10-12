@@ -27,10 +27,10 @@ describe("seeded structures", () => {
         expect(structureForColumn("same", 12, -8)).toEqual(structureForColumn("same", 12, -8));
     });
 
-    test("builds a deterministic well", () => {
+    test("builds a deterministic dry well", () => {
         const structure = {id: "well", type: "well", chunkX: 3, chunkZ: 3};
         const chunks = addStructure(new Map(), "structures", structure);
-        expect(Array.from(chunks.values()).some((chunk) => Array.from(chunk.values()).includes("water"))).toBe(true);
+        expect(Array.from(chunks.values()).some((chunk) => Array.from(chunk.values()).includes("water"))).toBe(false);
     });
 
     test("places a restrained number of deterministic houses across the overworld", () => {
@@ -82,7 +82,7 @@ describe("seeded structures", () => {
 
         ["door", "door_top", "window", "ladder", "lantern", "bed", "wood_table", "chair", "cabinet", "rug", "bench", "flowerpot"]
             .forEach((id) => expect(ids).toContain(id));
-        expect(ids.filter((id) => id === "water").length).toBeGreaterThanOrEqual(48);
+        expect(ids).not.toContain("water");
         expect(ids.filter((id) => id === "window").length).toBeGreaterThan(70);
     });
 
@@ -178,8 +178,9 @@ describe("seeded structures", () => {
             if (city) districts.push(city);
         }
         const allIds = districts.flatMap((district) => generatedIds("city-build", district));
-        ["gray_brick", "polished_stone", "door", "window", "bed", "wood_table", "lantern", "elevator", "water", "bench", "bush", "crate", "barrel", "sign", "path_marker"]
+        ["gray_brick", "polished_stone", "door", "window", "bed", "wood_table", "lantern", "elevator", "bench", "bush", "crate", "barrel", "sign", "path_marker"]
             .forEach((id) => expect(allIds).toContain(id));
+        expect(allIds).not.toContain("water");
         districts.forEach((district) => {
             const chunks = generatedStructure("city-build", district);
             Array.from(chunks.keys()).forEach((key) => {

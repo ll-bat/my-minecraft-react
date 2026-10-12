@@ -1,11 +1,11 @@
 import {useTrimesh} from "@react-three/cannon";
 import {useFrame, useThree} from "@react-three/fiber";
-import {memo, useCallback, useEffect, useMemo, useRef, useState} from "react";
-import {BufferGeometry, DoubleSide, Float32BufferAttribute, Matrix4, Vector3} from "three";
+import {memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from "react";
+import {BoxGeometry, BufferGeometry, DoubleSide, Float32BufferAttribute, InstancedMesh, Matrix4, MeshBasicMaterial, Vector3} from "three";
 import {useStore} from "../hooks/useStore";
 import {BLOCK_BY_ID} from "../world/blocks";
 import {voxelFromIntersection} from "../world/chunkGeometry";
-import {chunkCoordinate, getBlock, meshingChunkNeighborhood, parseChunkKey} from "../world/chunks";
+import {CHUNK_SIZE, chunkCoordinate, getBlock, meshingChunkNeighborhood, parseChunkKey} from "../world/chunks";
 import {blockIntersectsPlayer, MAX_INTERACTION_DISTANCE, positionKey} from "../world/coordinates";
 import {isPartialShape, rotateBounds, shapeParts} from "../world/blockShapes";
 import {miningDuration} from "../world/mining";
@@ -14,8 +14,12 @@ import {buildChunkMeshAsync} from "../world/meshStreaming";
 import {atlasMaterialDefinition} from "../images/gameAssets";
 import {ModelObjects} from "./ModelObjects";
 import {registerChunkMetrics, unregisterChunkMetrics} from "../world/renderMetrics";
+import {BRIDGE_INTERACTION_DISTANCE, planBridge} from "../world/bridges";
+import {ITEM_BY_ID} from "../world/items";
 
 const MIN_BREAK_HOLD_MS = 450;
+const BRIDGE_CHUNK_REACH = Math.ceil(BRIDGE_INTERACTION_DISTANCE / CHUNK_SIZE) + 1;
+const BRIDGE_PREVIEW_CAPACITY = 512;
 const BLOCK_MESH_DEFINITIONS = Object.fromEntries(Object.values(BLOCK_BY_ID).map((block) => [
     block.id,
     {
@@ -147,15 +151,20 @@ const BreakingOverlay = ({breaking}) => {
     );
 };
 
-const ChunkCollision = ({collision}) => {
+const ChunkCollision = ({collision, token}) => {
+    const markChunkCollisionReady = useStore((state) => state.markChunkCollisionReady);
     const [collisionRef] = useTrimesh(() => ({
         args: [collision.vertices, collision.indices],
         type: "Static",
     }), undefined, [collision]);
+    useEffect(() => {
+        markChunkCollisionReady(token, true);
+        return () => markChunkCollisionReady(token, false);
+    }, [collision, markChunkCollisionReady, token]);
     return <mesh ref={collisionRef} visible={false}/>;
 };
 
-const Chunk = memo(({chunkKey, collisionEnabled, interactive, onPointerDown, onPointerOut}) => {
+const Chunk = memo(({chunkKey, collisionEnabled, collisionToken, interactive, onPointerDown, onPointerMove, onPointerOut}) => {
     const blockMap = useStore((state) => state.chunks.get(chunkKey));
     const revision = useStore((state) => state.chunkRevisions.get(chunkKey) ?? 0);
     const [meshData, setMeshData] = useState(EMPTY_MESH_DATA);
@@ -208,6 +217,7 @@ const Chunk = memo(({chunkKey, collisionEnabled, interactive, onPointerDown, onP
                         key={materialKey}
                         geometry={geometry}
                         onPointerDown={interactive ? onPointerDown : undefined}
+                        onPointerMove={interactive ? onPointerMove : undefined}
                         onPointerOut={interactive ? onPointerOut : undefined}
                         renderOrder={atlas?.layer === "translucent" ? 3 : atlas?.layer === "cutout" ? 1 : 0}
                     >
@@ -215,10 +225,77 @@ const Chunk = memo(({chunkKey, collisionEnabled, interactive, onPointerDown, onP
                     </mesh>
                 );
             })}
-            {collisionEnabled && <ChunkCollision collision={meshData.collision}/>}
+            {collisionEnabled && meshData !== EMPTY_MESH_DATA
+                && <ChunkCollision collision={meshData.collision} token={collisionToken}/>}
         </group>
     );
 });
+
+const BridgePreviewBatch = ({placements, color, scale}) => {
+    const mesh = useMemo(() => {
+        const geometry = new BoxGeometry();
+        const material = new MeshBasicMaterial({
+            color: "white",
+            opacity: 0.34,
+            transparent: true,
+            depthWrite: false,
+        });
+        const instance = new InstancedMesh(geometry, material, BRIDGE_PREVIEW_CAPACITY);
+        instance.count = 0;
+        instance.frustumCulled = false;
+        instance.raycast = () => null;
+        return instance;
+    }, []);
+    useEffect(() => () => {
+        mesh.geometry.dispose();
+        mesh.material.dispose();
+        mesh.dispose();
+    }, [mesh]);
+    useLayoutEffect(() => {
+        mesh.material.color.set(color);
+        placements.forEach(({position}, index) => {
+            const matrix = new Matrix4().makeScale(...scale);
+            matrix.setPosition(...position);
+            mesh.setMatrixAt(index, matrix);
+        });
+        mesh.count = placements.length;
+        mesh.instanceMatrix.needsUpdate = true;
+    }, [color, mesh, placements, scale]);
+    return <primitive object={mesh}/>;
+};
+
+const BridgePreview = ({anchor, hover, chunks}) => {
+    const plan = useMemo(() => anchor && hover
+        ? planBridge(chunks, anchor.position, hover, anchor.style)
+        : null, [anchor, chunks, hover]);
+    const color = plan?.ok ? "#63e67d" : "#ef5d62";
+    const axis = plan?.axis;
+    const batches = useMemo(() => {
+        const grouped = {deck: [], railing: [], support: [], lantern: []};
+        (plan?.placements ?? []).forEach((placement) => grouped[placement.role]?.push(placement));
+        return [
+            {role: "deck", placements: grouped.deck, scale: [0.96, 0.96, 0.96]},
+            {
+                role: "railing",
+                placements: grouped.railing,
+                scale: axis === "x" ? [0.92, 0.72, 0.16]
+                    : axis === "z" ? [0.16, 0.72, 0.92] : [0.42, 0.72, 0.42],
+            },
+            {role: "support", placements: grouped.support, scale: [0.28, 0.96, 0.28]},
+            {role: "lantern", placements: grouped.lantern, scale: [0.32, 0.48, 0.32]},
+        ];
+    }, [axis, plan]);
+    if (!anchor) return null;
+    return <group raycast={() => null}>
+        <mesh position={[anchor.position[0], anchor.position[1] + 0.54, anchor.position[2]]} scale={[1.08, 0.08, 1.08]} raycast={() => null}>
+            <boxGeometry/><meshBasicMaterial color="#ffd45c" opacity={0.72} transparent depthWrite={false}/>
+        </mesh>
+        {hover && <mesh position={[hover[0], hover[1] + 0.56, hover[2]]} scale={[1.04, 0.12, 1.04]} raycast={() => null}>
+            <boxGeometry/><meshBasicMaterial color={color} opacity={0.7} transparent depthWrite={false}/>
+        </mesh>}
+        {batches.map((batch) => <BridgePreviewBatch key={batch.role} {...batch} color={color}/>)}
+    </group>;
+};
 
 export const ChunkWorld = () => {
     const {camera} = useThree();
@@ -229,10 +306,20 @@ export const ChunkWorld = () => {
     const worldId = useStore((state) => state.worldId);
     const ensureColumns = useStore((state) => state.ensureColumns);
     const addCube = useStore((state) => state.addCube);
-    const removeCube = useStore((state) => state.removeCube);
+    const removeCubeSafely = useStore((state) => state.removeCubeSafely);
+    const destroyBlockWithSelectedTool = useStore((state) => state.destroyBlockWithSelectedTool);
     const interactBlock = useStore((state) => state.interactBlock);
     const selectedItemAction = useStore((state) => state.applySelectedItemToBlock);
+    const bridgeAnchor = useStore((state) => state.bridgeAnchor);
+    const chunks = useStore((state) => state.chunks);
+    const bridgeStyle = useStore((state) => {
+        const stack = state.inventory[state.selectedHotbar];
+        return stack ? ITEM_BY_ID[stack.itemId]?.bridgeStyle ?? null : null;
+    });
+    const selectBridgeEndpoint = useStore((state) => state.selectBridgeEndpoint);
+    const cancelBridge = useStore((state) => state.cancelBridge);
     const [breaking, setBreaking] = useState(null);
+    const [bridgeHover, setBridgeHover] = useState(null);
     const [collisionChunkKeys, setCollisionChunkKeys] = useState(() => new Set());
     const breakingTimer = useRef(null);
     const breakingRelease = useRef(null);
@@ -322,21 +409,28 @@ export const ChunkWorld = () => {
             const progress = (performance.now() - startedAt) / duration;
             if (progress >= 1) {
                 cancelBreaking();
-                removeCube(...position);
+                removeCubeSafely(...position);
                 return;
             }
             setBreaking({position, blockId, progress});
         }, 30);
-    }, [cancelBreaking, interactBlock, removeCube]);
+    }, [cancelBreaking, interactBlock, removeCubeSafely]);
 
     useEffect(() => () => cancelBreaking(), [cancelBreaking]);
 
-    const handlePointerDown = useCallback((event) => {
-        event.stopPropagation();
-        if (useStore.getState().inventoryOpen || !event.face || event.distance > MAX_INTERACTION_DISTANCE) {
-            return;
-        }
+    useEffect(() => {
+        if (!bridgeStyle) setBridgeHover(null);
+    }, [bridgeStyle]);
 
+    useEffect(() => {
+        const cancel = (event) => {
+            if (event.code === "Escape" && useStore.getState().bridgeAnchor) cancelBridge();
+        };
+        document.addEventListener("keydown", cancel);
+        return () => document.removeEventListener("keydown", cancel);
+    }, [cancelBridge]);
+
+    const eventNormal = useCallback((event) => {
         const normal = event.face.normal.clone();
         if (Number.isInteger(event.instanceId) && event.object.getMatrixAt) {
             const transform = new Matrix4();
@@ -346,10 +440,40 @@ export const ChunkWorld = () => {
         } else {
             normal.transformDirection(event.object.matrixWorld);
         }
+        return normal;
+    }, []);
+
+    const handlePointerMove = useCallback((event) => {
+        if (!bridgeStyle || !event.face || event.distance > BRIDGE_INTERACTION_DISTANCE) return;
+        const normal = eventNormal(event);
+        const nextHover = voxelFromIntersection(event.point, normal);
+        setBridgeHover((current) => current?.every((value, axis) => value === nextHover[axis]) ? current : nextHover);
+    }, [bridgeStyle, eventNormal]);
+
+    const handlePointerDown = useCallback((event) => {
+        event.stopPropagation();
+        const interactionDistance = bridgeStyle ? BRIDGE_INTERACTION_DISTANCE : MAX_INTERACTION_DISTANCE;
+        if (useStore.getState().inventoryOpen || !event.face || event.distance > interactionDistance) {
+            return;
+        }
+
+        const normal = eventNormal(event);
+        const target = voxelFromIntersection(event.point, normal);
+        if (bridgeStyle) {
+            event.nativeEvent?.preventDefault();
+            if (event.button === 2) {
+                cancelBridge();
+                return;
+            }
+            if (event.button !== 0) return;
+            selectBridgeEndpoint(target, bridgeStyle);
+            setBridgeHover(target);
+            return;
+        }
 
         if (event.button === 0) {
-            const target = voxelFromIntersection(event.point, normal);
             const position = voxelFromIntersection(event.point, normal, true);
+            if (destroyBlockWithSelectedTool(...target)) return;
             if (selectedItemAction(target, position)) return;
             if (!blockIntersectsPlayer(position, camera.position.toArray())) {
                 const direction = camera.getWorldDirection(new Vector3()).toArray();
@@ -362,11 +486,10 @@ export const ChunkWorld = () => {
 
         if (event.button === 2) {
             event.nativeEvent.preventDefault();
-            const target = voxelFromIntersection(event.point, normal);
             const blockId = useStore.getState().getBlock(target);
             if (blockId) startBreaking(target, blockId);
         }
-    }, [addCube, camera, selectedItemAction, startBreaking]);
+    }, [addCube, bridgeStyle, camera, cancelBridge, destroyBlockWithSelectedTool, eventNormal, selectBridgeEndpoint, selectedItemAction, startBreaking]);
 
     return (
         <>
@@ -376,17 +499,24 @@ export const ChunkWorld = () => {
                     Math.abs(chunkX - playerChunk[0]),
                     Math.abs(chunkZ - playerChunk[1])
                 );
+                const verticalDistance = Math.abs(chunkY - playerChunkY);
+                const interactive = bridgeStyle
+                    ? horizontalDistance <= BRIDGE_CHUNK_REACH && verticalDistance <= BRIDGE_CHUNK_REACH
+                    : horizontalDistance <= 1 && verticalDistance <= 1;
                 return <Chunk
                     key={key}
                     chunkKey={key}
                     collisionEnabled={collisionChunkKeys.has(key)}
-                    interactive={horizontalDistance <= 1 && Math.abs(chunkY - playerChunkY) <= 1}
-                    onPointerDown={handlePointerDown}
-                    onPointerOut={cancelBreaking}
+                    collisionToken={`${worldId}:${key}`}
+                    interactive={interactive}
+                    onPointerDown={interactive ? handlePointerDown : undefined}
+                    onPointerMove={interactive ? handlePointerMove : undefined}
+                    onPointerOut={interactive ? cancelBreaking : undefined}
                 />;
             })}
             <ModelObjects onPointerDown={handlePointerDown} onPointerOut={cancelBreaking}/>
             {breaking && <BreakingOverlay breaking={breaking}/>}
+            <BridgePreview anchor={bridgeAnchor} hover={bridgeHover} chunks={chunks}/>
         </>
     );
 };

@@ -7,10 +7,23 @@ import {
     locateBlock,
     neighboringChunkKeys,
     setBlock,
+    setBlocks,
     worldPosition
 } from "./chunks";
 
 describe("chunk coordinate helpers", () => {
+    test("applies grouped block changes without mutating source chunks", () => {
+        const source = setBlock(new Map(), [0, 0, 0], "stone");
+        const changed = setBlocks(source, [
+            {position: [0, 0, 0], blockId: null},
+            {position: [1, 0, 0], blockId: "wood"},
+            {position: [17, 0, 0], blockId: "dirt"},
+        ]);
+        expect(getBlock(source, [0, 0, 0])).toBe("stone");
+        expect(getBlock(changed, [0, 0, 0])).toBeNull();
+        expect(getBlock(changed, [1, 0, 0])).toBe("wood");
+        expect(getBlock(changed, [17, 0, 0])).toBe("dirt");
+    });
     test.each([
         [0, 0, 0],
         [15, 0, 15],

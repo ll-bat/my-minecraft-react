@@ -2,6 +2,7 @@
 """Validate generated visual assets, provenance, and atlas padding."""
 
 import json
+import struct
 from pathlib import Path
 
 from PIL import Image
@@ -9,6 +10,7 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[1]
 GAME = ROOT / "src/images/game"
 ATLAS_DIR = GAME / "atlases"
+VEHICLE_DIR = GAME / "vehicles"
 
 
 def require(condition, message):
@@ -56,10 +58,24 @@ def validate_atlases():
     return len(metadata["entries"]), len(atlases)
 
 
+def validate_watercraft():
+    for name in ("boat-row-large.glb", "ship-small.glb"):
+        data = (VEHICLE_DIR / name).read_bytes()
+        magic, version, total_length = struct.unpack_from("<III", data, 0)
+        require(magic == 0x46546C67 and version == 2 and total_length == len(data), f"invalid GLB: {name}")
+        json_length, json_type = struct.unpack_from("<II", data, 12)
+        require(json_type == 0x4E4F534A, f"missing GLB JSON chunk: {name}")
+        document = json.loads(data[20:20 + json_length].decode("utf8").rstrip("\0 "))
+        images = document.get("images", [])
+        require(images and all("bufferView" in image and "uri" not in image for image in images), f"watercraft texture is not embedded: {name}")
+    return 2
+
+
 def main():
     manifest_count = validate_manifest()
     texture_count, atlas_count = validate_atlases()
-    print(f"Validated {texture_count} textures in {atlas_count} padded atlases and {manifest_count} provenance records")
+    watercraft_count = validate_watercraft()
+    print(f"Validated {texture_count} textures in {atlas_count} padded atlases, {watercraft_count} self-contained watercraft models, and {manifest_count} provenance records")
 
 
 if __name__ == "__main__":

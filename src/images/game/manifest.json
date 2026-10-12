@@ -686,6 +686,22 @@
       "source": "src/images/assets/kenney-fish-pack/fish_pink.png"
     },
     {
+      "author": "Kenney",
+      "id": "spawn_boat",
+      "license": "CC0-1.0",
+      "modification": "copied and packed into shared item atlas",
+      "output": "src/images/game/items/spawn_boat.png",
+      "source": "src/images/assets/kenney-watercraft-kit/boat-row-large.png"
+    },
+    {
+      "author": "Kenney",
+      "id": "spawn_ship",
+      "license": "CC0-1.0",
+      "modification": "copied and packed into shared item atlas",
+      "output": "src/images/game/items/spawn_ship.png",
+      "source": "src/images/assets/kenney-watercraft-kit/ship-small.png"
+    },
+    {
       "id": "model_barrel",
       "modification": "rendered from project glTF cuboids",
       "output": "src/images/game/items/model_barrel.png",
@@ -944,6 +960,24 @@
       "modification": "original scripted low-poly model",
       "output": "src/images/game/models/wood_table.gltf",
       "source": "project-generated"
+    },
+    {
+      "assetType": "model",
+      "author": "Kenney",
+      "id": "vehicle:boat-row-large",
+      "license": "CC0-1.0",
+      "modification": "embedded the supplied CC0 colormap into a self-contained GLB",
+      "output": "src/images/game/vehicles/boat-row-large.glb",
+      "source": "src/images/assets/kenney-watercraft-kit/boat-row-large.glb"
+    },
+    {
+      "assetType": "model",
+      "author": "Kenney",
+      "id": "vehicle:ship-small",
+      "license": "CC0-1.0",
+      "modification": "embedded the supplied CC0 colormap into a self-contained GLB",
+      "output": "src/images/game/vehicles/ship-small.glb",
+      "source": "src/images/assets/kenney-watercraft-kit/ship-small.glb"
     }
   ],
   "license": "CC0-1.0",

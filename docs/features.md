@@ -121,7 +121,7 @@ World architecture should be improved before terrain, water, or large maps are a
 
 ## Phase 4: Add water and environmental simulation
 
-**Status: Complete.** Procedural water and lava, localized lake generation, swimming, underwater fog, static player-placed fluid cubes, bounded fluid engine utilities, lava hazards, day/night lighting, rain, and snow are implemented.
+**Status: Complete.** Finite river generation, swimming, underwater fog, static player-placed fluid cubes, bounded fluid engine utilities, lava hazards, day/night lighting, rain, and snow are implemented. Rivers are the only automatically generated water.
 
 Water depends on chunking, transparent block rendering, and block property support.
 
@@ -129,7 +129,7 @@ Water depends on chunking, transparent block rendering, and block property suppo
    - Add a transparent, tinted water material with a slightly lowered top surface.
    - Render water faces only where they touch air or a different transparent block.
    - Add underwater fog and color changes when the camera is submerged.
-   - Carve deterministic finite rivers with moderate widths, sand beds, tapered endpoints, and paths longer than the maximum view diameter.
+   - Carve deterministic finite rivers with moderate widths, sand beds, tapered endpoints, paths longer than the maximum view diameter, and water levels that stay flat or descend downstream.
 
 2. **Add player interaction with water**
    - Slow walking movement while submerged.
@@ -151,7 +151,7 @@ Water depends on chunking, transparent block rendering, and block property suppo
    - Add rain and snow after biome and water behavior are established.
    - Keep weather effects local to visible chunks.
 
-**Milestone:** Local lakes and finite rivers render correctly, the player can swim, placed fluids remain predictable, and the environment changes over time.
+**Milestone:** Finite rivers render correctly, the player can swim, placed fluids remain predictable, and the environment changes over time.
 
 ## Phase 5: Add items and inventory
 
@@ -280,7 +280,7 @@ Water depends on chunking, transparent block rendering, and block property suppo
 
 These features should come after the single-player world and save model are stable.
 
-**Status: Complete.** Multiplayer is excluded from the current project scope. Multiple isolated worlds, export/import, exploration tools, deterministic structures, rare resources, peaceful goals and enchantments, Dream Grove portal travel, and validated namespaced data packs are implemented. Seeded Overworld structures now include sparse furnished houses, four-floor pool hotels, five-floor residential buildings, and fenced stadiums with biome-aware styles. The ordered implementation is documented in `docs/phase-10-plan.md`.
+**Status: Complete.** Multiplayer is excluded from the current project scope. Multiple isolated worlds, export/import, exploration tools, deterministic structures, rare resources, peaceful goals and enchantments, Dream Grove portal travel, and validated namespaced data packs are implemented. Seeded Overworld structures now include sparse furnished houses, four-floor hotels with dry sunken courtyards, five-floor residential buildings, and fenced stadiums with biome-aware styles. The ordered implementation is documented in `docs/phase-10-plan.md`.
 
 1. **World creation and management UI**
    - Create, name, list, open, export, import, and delete multiple worlds.
@@ -293,7 +293,7 @@ These features should come after the single-player world and save model are stab
 3. **Structures and progression**
    - Generate villages, ruins, puzzle vaults, and other seeded structures without hostile encounters.
    - Place biome-aware houses only on suitable dry terrain, keep them well spaced, and furnish them with functional doors, windows, lights, and decorative objects.
-   - Add rarer multi-floor hotels with pools and tall residential buildings while keeping each generated landmark safe for column-based streaming.
+   - Add rarer multi-floor hotels with sunken courtyards and tall residential buildings while keeping each generated landmark safe for column-based streaming.
    - Add standard and grand regional stadiums with seeded size selection, visible fenced enclosures, full marked pitches, tiered stands, wide entrances, goals, benches, scoreboards, and tall floodlights.
    - Add rarer materials, enchantments, and progression goals only when their supporting systems exist.
 

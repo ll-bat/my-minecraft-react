@@ -2,9 +2,9 @@ import {useFrame} from "@react-three/fiber";
 import {useBox} from "@react-three/cannon";
 import {Suspense, useEffect, useRef} from "react";
 import {useStore} from "../hooks/useStore";
-import {isNightTime, VILLAGER_PROFESSIONS} from "../world/entities";
-import {ITEM_BY_ID} from "../world/items";
-import {HorseModel, HumanModel, SheepModel} from "./CreatureModels";
+import {CREATURE_TYPES, isNightTime, VILLAGER_PROFESSIONS} from "../world/entities";
+import {isDestructiveTool, ITEM_BY_ID} from "../world/items";
+import {HorseModel, HumanModel, SheepModel, WatercraftModel} from "./CreatureModels";
 
 const Box = ({position, scale, color, emissive}) => (
     <mesh position={position} scale={scale}>
@@ -13,18 +13,29 @@ const Box = ({position, scale, color, emissive}) => (
     </mesh>
 );
 
-const BoatCollider = ({entity}) => {
+const WatercraftCollider = ({entity}) => {
+    const ship = entity.type === "ship";
+    const size = ship ? [2.3, 0.32, 4.4] : [1.45, 0.3, 2.35];
+    const deckHeight = ship ? 1.02 : 0.52;
     const [ref, api] = useBox(() => ({
-        args: [1.45, 0.3, 2.1],
-        position: [entity.position[0], entity.position[1] + 0.2, entity.position[2]],
+        args: size,
+        position: [entity.position[0], entity.position[1] + deckHeight, entity.position[2]],
         rotation: [0, entity.heading, 0],
         type: "Kinematic",
     }));
     useEffect(() => {
-        api.position.set(entity.position[0], entity.position[1] + 0.2, entity.position[2]);
+        api.position.set(entity.position[0], entity.position[1] + deckHeight, entity.position[2]);
         api.rotation.set(0, entity.heading, 0);
-    }, [api.position, api.rotation, entity.heading, entity.position]);
-    return <mesh ref={ref} visible={false}><boxGeometry args={[1.45, 0.3, 2.1]}/></mesh>;
+    }, [api.position, api.rotation, deckHeight, entity.heading, entity.position]);
+    return <mesh ref={ref} visible={false}><boxGeometry args={size}/></mesh>;
+};
+
+const WatercraftInteractionVolume = ({type}) => {
+    const ship = type === "ship";
+    return <mesh position={[0, ship ? 2.25 : 0.45, 0]}>
+        <boxGeometry args={ship ? [3, 4.7, 5.4] : [2.8, 0.9, 3]}/>
+        <meshBasicMaterial transparent opacity={0} depthWrite={false}/>
+    </mesh>;
 };
 
 const CreatureModel = ({entity}) => {
@@ -37,14 +48,8 @@ const CreatureModel = ({entity}) => {
     if (entity.type === "sheep") {
         return <SheepModel walking={entity.animationState === "walking"}/>;
     }
-    if (entity.type === "boat") {
-        return <>
-            <Box position={[0, 0.18, 0]} scale={[1.45, 0.28, 2.1]} color="#9b6334"/>
-            <Box position={[-0.65, 0.43, 0]} scale={[0.18, 0.52, 2.05]} color="#b27943"/>
-            <Box position={[0.65, 0.43, 0]} scale={[0.18, 0.52, 2.05]} color="#b27943"/>
-            <Box position={[0, 0.43, -0.92]} scale={[1.2, 0.5, 0.18]} color="#b27943"/>
-            <Box position={[0, 0.43, 0.92]} scale={[1.2, 0.5, 0.18]} color="#b27943"/>
-        </>;
+    if (CREATURE_TYPES[entity.type]?.watercraft) {
+        return <WatercraftModel type={entity.type}/>;
     }
     if (entity.type === "minecart") {
         return <>
@@ -100,11 +105,22 @@ const CreatureModel = ({entity}) => {
     </>;
 };
 
-const Creature = ({entity}) => {
+const Creature = ({entity, mounted = false}) => {
     const ref = useRef();
     const interactCreature = useStore((state) => state.interactCreature);
-    useFrame(({clock}) => {
+    const destroyEntityWithSelectedTool = useStore((state) => state.destroyEntityWithSelectedTool);
+    const selectedTool = useStore((state) => {
+        const stack = state.inventory[state.selectedHotbar];
+        return isDestructiveTool(stack ? ITEM_BY_ID[stack.itemId] : null);
+    });
+    useFrame(({camera, clock}) => {
         if (!ref.current) return;
+        if (mounted) {
+            const riderOffset = CREATURE_TYPES[entity.type]?.riderOffset ?? 0.55;
+            ref.current.position.set(camera.position.x, camera.position.y - riderOffset, camera.position.z);
+            ref.current.rotation.y = camera.rotation.y;
+            return;
+        }
         const swimming = entity.type.startsWith("fish_");
         const articulated = entity.type === "sheep" || entity.type === "horse" || entity.type === "villager";
         const bob = entity.animationState === "walking" && !articulated ? Math.abs(Math.sin(clock.elapsedTime * 7)) * 0.08
@@ -119,15 +135,23 @@ const Creature = ({entity}) => {
             position={entity.position}
             onPointerDown={(event) => {
                 event.stopPropagation();
-                if (event.distance <= 6) interactCreature(entity.id);
+                const button = event.button ?? event.nativeEvent?.button;
+                if (button === 0 && selectedTool) {
+                    destroyEntityWithSelectedTool(entity.id);
+                    return;
+                }
+                if (CREATURE_TYPES[entity.type]?.rideable && button !== 2) return;
+                if (button === 2) event.nativeEvent?.preventDefault();
+                interactCreature(entity.id);
             }}
         >
             <Suspense fallback={null}><CreatureModel entity={entity}/></Suspense>
+            {CREATURE_TYPES[entity.type]?.watercraft && <WatercraftInteractionVolume type={entity.type}/>}
             {entity.animationState === "happy" && (
                 <Box position={[0, 1.65, 0]} scale={[0.18, 0.18, 0.18]} color="#ff5277" emissive="#ff315d"/>
             )}
         </group>
-        {entity.type === "boat" && <BoatCollider entity={entity}/>}
+        {CREATURE_TYPES[entity.type]?.watercraft && !mounted && <WatercraftCollider entity={entity}/>}
     </>);
 };
 
@@ -146,11 +170,11 @@ export const Creatures = () => {
 
     return <>
         {entities.filter((entity) => (
-            entity.id !== mountedEntityId
+            (entity.id !== mountedEntityId || CREATURE_TYPES[entity.type]?.watercraft)
             &&
             Math.hypot(entity.position[0] - playerPosition[0], entity.position[2] - playerPosition[2]) <= 56
             && (entity.type !== "glow_sprite" || isNightTime(worldTime))
-        )).map((entity) => <Creature key={entity.id} entity={entity}/>)}
+        )).map((entity) => <Creature key={entity.id} entity={entity} mounted={entity.id === mountedEntityId}/>)}
     </>;
 };
 

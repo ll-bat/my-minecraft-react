@@ -1,9 +1,10 @@
-import {CHUNK_SIZE, chunkKey, localIndex} from "./chunks";
+import {CHUNK_SIZE, chunkKey, getBlock, localIndex, parseChunkKey} from "./chunks";
 import {fractalNoise2D, fractalNoise3D, randomAt, seedToNumber} from "./noise";
 
 export const WORLD_MIN_Y = -16;
 export const WORLD_MAX_Y = 64;
 export const SEA_LEVEL = 6;
+export const NATURAL_WATER_VERSION = "river-only-v4";
 const LAKE_CELL_SIZE = 32;
 const RIVER_CELL_SIZE = 384;
 const RIVER_SEGMENTS = 24;
@@ -105,6 +106,16 @@ function baseTerrainAt(seed, x, z, numericSeed = seedToNumber(seed)) {
     };
 }
 
+function pointAlongRiver(points, progress) {
+    const scaled = clamp(progress, 0, 1) * (points.length - 1);
+    const index = Math.min(points.length - 2, Math.floor(scaled));
+    const localProgress = scaled - index;
+    return {
+        x: points[index].x + (points[index + 1].x - points[index].x) * localProgress,
+        z: points[index].z + (points[index + 1].z - points[index].z) * localProgress,
+    };
+}
+
 export function riverPlanForCell(seed, cellX, cellZ) {
     const cacheKey = `${seed}:${cellX},${cellZ}`;
     if (riverPlanCache.has(cacheKey)) return riverPlanCache.get(cacheKey);
@@ -121,7 +132,7 @@ export function riverPlanForCell(seed, cellX, cellZ) {
     const tangentZ = Math.sin(angle);
     const normalX = -tangentZ;
     const normalZ = tangentX;
-    const points = Array.from({length: RIVER_SEGMENTS + 1}, (_, index) => {
+    let points = Array.from({length: RIVER_SEGMENTS + 1}, (_, index) => {
         const t = index / RIVER_SEGMENTS;
         const along = (t - 0.5) * length;
         const bend = Math.sin(t * Math.PI * 2) * meander
@@ -132,6 +143,23 @@ export function riverPlanForCell(seed, cellX, cellZ) {
             t,
         };
     });
+    const firstSurface = baseTerrainAt(seed, Math.round(points[0].x), Math.round(points[0].z)).surface;
+    const lastSurface = baseTerrainAt(
+        seed,
+        Math.round(points[points.length - 1].x),
+        Math.round(points[points.length - 1].z)
+    ).surface;
+    // Flow from the higher endpoint toward the lower one. Once the channel
+    // drops, its water profile never rises again; later hills are cut through.
+    if (lastSurface > firstSurface) points = [...points].reverse();
+    points = points.map((point, index) => ({...point, t: index / RIVER_SEGMENTS}));
+    const profileSteps = Math.ceil(length);
+    const waterLevels = [];
+    for (let index = 0; index <= profileSteps; index += 1) {
+        const point = pointAlongRiver(points, index / profileSteps);
+        const terrainLevel = baseTerrainAt(seed, Math.round(point.x), Math.round(point.z)).surface;
+        waterLevels.push(index === 0 ? terrainLevel : Math.min(waterLevels[index - 1], terrainLevel));
+    }
     const plan = {
         id: `${cellX},${cellZ}`,
         cellX,
@@ -141,6 +169,7 @@ export function riverPlanForCell(seed, cellX, cellZ) {
         width: halfWidth * 2,
         halfWidth,
         points,
+        waterLevels,
         bounds: {
             minX: Math.min(...points.map((point) => point.x)) - halfWidth,
             maxX: Math.max(...points.map((point) => point.x)) + halfWidth,
@@ -183,12 +212,17 @@ export function riverAt(seed, x, z) {
     const halfWidth = plan.halfWidth * endTaper;
     if (closest.distanceSquared > halfWidth * halfWidth) return null;
     const distance = Math.sqrt(closest.distanceSquared);
+    const levelIndex = Math.min(
+        plan.waterLevels.length - 1,
+        Math.floor(closest.t * (plan.waterLevels.length - 1))
+    );
     return {
         id: plan.id,
         progress: closest.t,
         distance,
         halfWidth,
         depth: distance <= halfWidth * 0.62 ? 2 : 1,
+        waterLevel: plan.waterLevels[levelIndex],
     };
 }
 
@@ -200,8 +234,11 @@ export function terrainAt(seed, x, z) {
     return {
         ...base,
         baseSurface: base.surface,
-        surface: Math.max(WORLD_MIN_Y + 4, base.surface - river.depth),
-        river: {...river, waterLevel: base.surface},
+        surface: Math.max(
+            WORLD_MIN_Y + 4,
+            Math.min(base.surface - river.depth, river.waterLevel - river.depth)
+        ),
+        river,
     };
 }
 
@@ -249,9 +286,8 @@ export function hasRiverWater(seed, x, z) {
     return riverAt(seed, x, z) !== null;
 }
 
-export function hasNaturalWater(seed, x, z, surface = null) {
-    if (hasRiverWater(seed, x, z)) return true;
-    return hasLakeWater(seed, x, z, surface);
+export function hasNaturalWater(seed, x, z) {
+    return hasRiverWater(seed, x, z);
 }
 
 function isCave(numericSeed, x, y, z, surface) {
@@ -298,6 +334,76 @@ function putBlock(chunks, x, y, z, blockId, replace = true) {
         chunk.set(index, blockId);
         chunks.set(key, chunk);
     }
+}
+
+function removeBlock(chunks, x, y, z) {
+    const chunkX = Math.floor(x / CHUNK_SIZE);
+    const chunkY = Math.floor(y / CHUNK_SIZE);
+    const chunkZ = Math.floor(z / CHUNK_SIZE);
+    const key = chunkKey(chunkX, chunkY, chunkZ);
+    const chunk = chunks.get(key);
+    if (!chunk) return;
+    const localX = ((x % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    const localY = ((y % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    const localZ = ((z % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    chunk.delete(localIndex(localX, localY, localZ));
+    if (!chunk.size) chunks.delete(key);
+}
+
+const RIVER_REPLACEABLE_BLOCKS = new Set([
+    "water", "sand", "grass", "dirt", "stone", "snow", "coal_ore", "iron_ore", "copper_ore", "gold_ore", "crystal_ore",
+]);
+
+const WATER_NEIGHBORS = [
+    [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1],
+];
+
+export function upgradeNaturalWaterColumn(chunks, seed, columnX, columnZ, placedFluidLevels = new Map()) {
+    const next = new Map(chunks);
+    chunks.forEach((chunk, key) => {
+        const [chunkX, , chunkZ] = parseChunkKey(key);
+        if (chunkX === columnX && chunkZ === columnZ) next.set(key, new Map(chunk));
+    });
+    let changed = false;
+    const minX = columnX * CHUNK_SIZE;
+    const minZ = columnZ * CHUNK_SIZE;
+    for (let localX = 0; localX < CHUNK_SIZE; localX += 1) for (let localZ = 0; localZ < CHUNK_SIZE; localZ += 1) {
+        const x = minX + localX;
+        const z = minZ + localZ;
+        const terrain = terrainAt(seed, x, z);
+        if (!terrain.river) {
+            const legacyLake = hasLakeWater(seed, x, z, terrain.baseSurface);
+            for (let y = WORLD_MIN_Y + 1; y <= WORLD_MAX_Y; y += 1) {
+                const position = [x, y, z];
+                if (getBlock(chunks, position) !== "water" || placedFluidLevels.has(`${x},${y},${z}`)) continue;
+                const connectedWater = WATER_NEIGHBORS.some(([dx, dy, dz]) => (
+                    getBlock(chunks, [x + dx, y + dy, z + dz]) === "water"
+                ));
+                if (legacyLake || connectedWater) {
+                    removeBlock(next, x, y, z);
+                    changed = true;
+                }
+            }
+        }
+        if (!terrain.river) continue;
+        const oldBed = Math.max(WORLD_MIN_Y + 4, terrain.baseSurface - terrain.river.depth);
+        let safeToReplace = true;
+        for (let y = terrain.surface - 3; y <= terrain.baseSurface; y += 1) {
+            const blockId = getBlock(next, [x, y, z]);
+            if (blockId && !RIVER_REPLACEABLE_BLOCKS.has(blockId)) {
+                safeToReplace = false;
+                break;
+            }
+        }
+        if (!safeToReplace) continue;
+        for (let y = terrain.surface - 3; y <= terrain.surface; y += 1) putBlock(next, x, y, z, "sand");
+        for (let y = terrain.surface + 1; y <= Math.max(oldBed, terrain.baseSurface); y += 1) {
+            if (y <= terrain.river.waterLevel) putBlock(next, x, y, z, "water");
+            else removeBlock(next, x, y, z);
+        }
+        changed = true;
+    }
+    return changed ? next : chunks;
 }
 
 function treeExists(seedNumber, x, z, surface = 0) {
@@ -375,8 +481,7 @@ export function generateChunkColumn(seed, chunkX, chunkZ) {
         for (let localZ = 0; localZ < CHUNK_SIZE; localZ += 1) {
             const x = minX + localX;
             const z = minZ + localZ;
-            const {biome, surface, baseSurface, river} = terrainAt(seed, x, z);
-            const lakeWater = hasLakeWater(seed, x, z, baseSurface);
+            const {biome, surface, river} = terrainAt(seed, x, z);
 
             for (let y = WORLD_MIN_Y; y <= surface; y += 1) {
                 let blockId;
@@ -384,7 +489,7 @@ export function generateChunkColumn(seed, chunkX, chunkZ) {
                     blockId = "bedrock";
                 } else if (isCave(numericSeed, x, y, z, surface)) {
                     continue;
-                } else if ((biome === BIOMES.DESERT || lakeWater || river) && y >= surface - 3) {
+                } else if ((biome === BIOMES.DESERT || river) && y >= surface - 3) {
                     blockId = "sand";
                 } else if (y === surface) {
                     blockId = biome === BIOMES.MOUNTAINS && surface >= 44
@@ -400,9 +505,8 @@ export function generateChunkColumn(seed, chunkX, chunkZ) {
                 putBlock(chunks, x, y, z, blockId);
             }
 
-            if (lakeWater || river) {
-                const waterLevel = Math.max(lakeWater ? SEA_LEVEL : WORLD_MIN_Y, river?.waterLevel ?? WORLD_MIN_Y);
-                for (let y = surface + 1; y <= waterLevel; y += 1) {
+            if (river) {
+                for (let y = surface + 1; y <= river.waterLevel; y += 1) {
                     putBlock(chunks, x, y, z, "water");
                 }
             }

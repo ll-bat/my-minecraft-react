@@ -623,8 +623,8 @@ function addHotel(chunks, seed, structure, centerX, centerZ) {
         const inWater = dx >= 4 && dx <= 6 && dz >= -4 && dz <= 3;
         if (inWater) {
             mutableSetBlock(chunks, [centerX + dx, baseY - 2, centerZ + dz], "polished_stone");
-            mutableSetBlock(chunks, [centerX + dx, baseY - 1, centerZ + dz], "water");
-            mutableSetBlock(chunks, [centerX + dx, baseY, centerZ + dz], "water");
+            mutableSetBlock(chunks, [centerX + dx, baseY - 1, centerZ + dz], null);
+            mutableSetBlock(chunks, [centerX + dx, baseY, centerZ + dz], null);
         } else {
             mutableSetBlock(chunks, [centerX + dx, baseY, centerZ + dz], "polished_stone");
         }
@@ -931,7 +931,7 @@ function addCityPlaza(chunks, centerX, centerZ, baseY) {
     }
     for (let dx = -2; dx <= 2; dx += 1) for (let dz = -2; dz <= 2; dz += 1) {
         const edge = Math.abs(dx) === 2 || Math.abs(dz) === 2;
-        mutableSetBlock(chunks, [centerX + dx, baseY + 1, centerZ + dz], edge ? "stone_slab" : "water");
+        mutableSetBlock(chunks, [centerX + dx, baseY + 1, centerZ + dz], edge ? "stone_slab" : "polished_stone");
     }
     mutableSetBlock(chunks, [centerX, baseY + 2, centerZ], "polished_stone");
     mutableSetBlock(chunks, [centerX, baseY + 3, centerZ], "lantern");
@@ -1023,7 +1023,7 @@ export function addStructure(chunks, seed, structure) {
         for (let dx = -2; dx <= 2; dx += 1) for (let dz = -2; dz <= 2; dz += 1) {
             if (Math.abs(dx) === 2 || Math.abs(dz) === 2) mutableSetBlock(next, [centerX + dx, y + 1, centerZ + dz], "stone");
         }
-        mutableSetBlock(next, [centerX, y + 1, centerZ], "water");
+        mutableSetBlock(next, [centerX, y + 1, centerZ], null);
         return next;
     }
     const material = structure.type === "camp" ? "wood" : "stone";

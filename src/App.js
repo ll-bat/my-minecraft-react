@@ -17,10 +17,12 @@ import {BlockParticles, FurnaceSmoke, GameAudio, HeldItem, InteractionFeedback, 
 import {AdvancedShortcuts, DataPackManager, DebugOverlay, MapPanel, WorldManager} from "./components/AdvancedUI";
 import {RenderingDiagnostics} from "./components/RenderingDiagnostics";
 import {AmbientSky} from "./components/AmbientSky";
+import {AutoSave} from "./components/AutoSave";
 
 function App() {
     return (
         <>
+            <AutoSave/>
             <Canvas onContextMenu={(event) => event.preventDefault()}>
                 <RenderingDiagnostics/>
                 <WorldEnvironment/>

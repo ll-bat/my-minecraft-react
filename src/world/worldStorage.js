@@ -10,7 +10,7 @@ import {ACTIVE_WORLD_KEY, ensureWorldCatalog, readCatalog, upsertWorld, worldDoc
 
 export const WORLD_STORAGE_KEY = "minecraft-react-world";
 export const LEGACY_STORAGE_KEY = "cubes";
-export const WORLD_VERSION = 8;
+export const WORLD_VERSION = 9;
 export const DEFAULT_WORLD_SEED = "minecraft-react";
 
 function validPosition(value) {
@@ -59,10 +59,75 @@ function normalizeBlockEntity(value) {
     return normalizeFurnace(value);
 }
 
+function serializeChunks(chunks) {
+    return Array.from(chunks ?? [], ([key, chunk]) => {
+        const palette = [];
+        const paletteIndexes = new Map();
+        const entries = Array.from(chunk).sort(([left], [right]) => left - right);
+        const runs = [];
+        let runStart = -1;
+        let runLength = 0;
+        let runPalette = -1;
+
+        const finishRun = () => {
+            if (runLength > 0) runs.push(runStart, runLength, runPalette);
+        };
+
+        entries.forEach(([index, blockId]) => {
+            let paletteIndex = paletteIndexes.get(blockId);
+            if (paletteIndex === undefined) {
+                paletteIndex = palette.length;
+                paletteIndexes.set(blockId, paletteIndex);
+                palette.push(blockId);
+            }
+            if (index === runStart + runLength && paletteIndex === runPalette) {
+                runLength += 1;
+            } else {
+                finishRun();
+                runStart = index;
+                runLength = 1;
+                runPalette = paletteIndex;
+            }
+        });
+        finishRun();
+        return [key, palette, runs];
+    });
+}
+
+function normalizeChunks(value) {
+    const chunks = new Map();
+    if (!Array.isArray(value)) return chunks;
+    value.forEach((record) => {
+        if (!Array.isArray(record) || !validKey(record[0], 3)) return;
+        const key = record[0];
+        const chunk = new Map();
+        if (record.length === 2 && Array.isArray(record[1])) {
+            record[1].forEach(([index, blockId]) => {
+                if (Number.isInteger(index) && index >= 0 && index < 4096 && isBlockId(blockId)) {
+                    chunk.set(index, blockId);
+                }
+            });
+        } else if (record.length === 3 && Array.isArray(record[1]) && Array.isArray(record[2])) {
+            const [palette, runs] = [record[1], record[2]];
+            for (let offset = 0; offset + 2 < runs.length; offset += 3) {
+                const start = runs[offset];
+                const length = runs[offset + 1];
+                const paletteIndex = runs[offset + 2];
+                const blockId = palette[paletteIndex];
+                if (!Number.isInteger(start) || !Number.isInteger(length) || length <= 0
+                    || start < 0 || start + length > 4096 || !isBlockId(blockId)) continue;
+                for (let index = start; index < start + length; index += 1) chunk.set(index, blockId);
+            }
+        }
+        if (chunk.size > 0) chunks.set(key, chunk);
+    });
+    return chunks;
+}
+
 function serializeSnapshot(value) {
     return {
         ...value,
-        chunks: Array.from(value.chunks ?? [], ([key, chunk]) => [key, Array.from(chunk)]),
+        chunks: serializeChunks(value.chunks),
         generatedColumns: Array.from(value.generatedColumns ?? []),
         fluidLevels: Array.from(value.fluidLevels ?? []),
         blockEntities: Array.from(value.blockEntities ?? []),
@@ -75,7 +140,7 @@ function normalizeSnapshot(value) {
     if (!value || !Array.isArray(value.chunks)) return null;
     return {
         ...value,
-        chunks: new Map(value.chunks.map(([key, entries]) => [key, new Map(entries)])),
+        chunks: normalizeChunks(value.chunks),
         generatedColumns: new Set(value.generatedColumns ?? []),
         fluidLevels: new Map(value.fluidLevels ?? []),
         blockEntities: new Map((value.blockEntities ?? []).map(([key, entity]) => [key, normalizeBlockEntity(entity)]).filter(([, entity]) => entity)),
@@ -143,21 +208,7 @@ export function parseWorldDocument(serialized, legacySerialized = null) {
 
         const migrated = document.version === 2;
 
-        const chunks = new Map();
-        document.chunks.forEach(([key, entries]) => {
-            if (!validKey(key, 3) || !Array.isArray(entries)) {
-                return;
-            }
-            const chunk = new Map();
-            entries.forEach(([index, blockId]) => {
-                if (Number.isInteger(index) && index >= 0 && index < 4096 && isBlockId(blockId)) {
-                    chunk.set(index, blockId);
-                }
-            });
-            if (chunk.size > 0) {
-                chunks.set(key, chunk);
-            }
-        });
+        const chunks = normalizeChunks(document.chunks);
 
         return {
             version: WORLD_VERSION,
@@ -290,7 +341,7 @@ export function serializeWorld(state) {
         enabledPacks: state.enabledPacks ?? [],
         entities: state.entities ?? [],
         spawnedCreatureGroups: Array.from(state.spawnedCreatureGroups ?? []),
-        chunks: Array.from(state.chunks, ([key, chunk]) => [key, Array.from(chunk)]),
+        chunks: serializeChunks(state.chunks),
     });
 }
 
@@ -308,9 +359,11 @@ export function readWorld() {
 
 export function writeWorld(state) {
     const serialized = serializeWorld(state);
-    window.localStorage.setItem(WORLD_STORAGE_KEY, serialized);
-    upsertWorld({id: state.worldUid ?? "world-default", name: state.worldName ?? "My World", seed: state.seed, createdAt: state.worldCreatedAt ?? Date.now()}, serialized);
+    // The per-world document is authoritative. Removing the old single-world
+    // mirror avoids storing the same potentially large document twice.
+    window.localStorage.removeItem(WORLD_STORAGE_KEY);
     window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+    upsertWorld({id: state.worldUid ?? "world-default", name: state.worldName ?? "My World", seed: state.seed, createdAt: state.worldCreatedAt ?? Date.now()}, serialized);
 }
 
 export function worldCatalog() {
@@ -321,9 +374,10 @@ export function selectWorld(id) {
     if (typeof window !== "undefined") window.localStorage.setItem(ACTIVE_WORLD_KEY, id);
 }
 
-export function clearSavedWorld() {
+export function clearSavedWorld(worldId = null) {
     window.localStorage.removeItem(WORLD_STORAGE_KEY);
     window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+    if (worldId) window.localStorage.removeItem(worldDocumentKey(worldId));
 }
 
 export function generatedColumnForPosition(position) {

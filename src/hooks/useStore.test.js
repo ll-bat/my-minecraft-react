@@ -29,6 +29,8 @@ describe("world store", () => {
             blockEntities: new Map(),
             scheduledUpdates: [],
             blockLight: new Map(),
+            lightSourceRevision: 0,
+            modelRevision: 0,
             activeChunkKeys: [],
             entities: [],
             spawnedCreatureGroups: new Set(),
@@ -51,6 +53,34 @@ describe("world store", () => {
         expect(useStore.getState().addCube(1.2, 2.8, -3.6)).toBe(true);
         expect(useStore.getState().addCube(1, 3, -4)).toBe(false);
         expect(getBlock(useStore.getState().chunks, [1, 3, -4])).toBe("dirt");
+    });
+
+    test("keeps global render indexes stable for an ordinary local block edit", () => {
+        const chunks = setBlock(new Map(), [0, 0, 0], "stone");
+        const activeChunkKeys = ["0,0,0"];
+        const blockLight = new Map([["100,4,100", 8]]);
+        const fluidLevels = new Map([["20,1,20", 0]]);
+        const blockStates = new Map([["20,1,20", {facing: "north"}]]);
+        const blockEntities = new Map([["20,1,20", {type: "chest", slots: []}]]);
+        useStore.setState({chunks, activeChunkKeys, blockLight, fluidLevels, blockStates, blockEntities, playerChunk: [0, 0]});
+
+        expect(useStore.getState().addCube(1, 1, 1)).toBe(true);
+        expect(useStore.getState().activeChunkKeys).toBe(activeChunkKeys);
+        expect(useStore.getState().blockLight).toBe(blockLight);
+        expect(useStore.getState().fluidLevels).toBe(fluidLevels);
+        expect(useStore.getState().blockStates).toBe(blockStates);
+        expect(useStore.getState().blockEntities).toBe(blockEntities);
+        expect(useStore.getState().modelRevision).toBe(0);
+        expect(useStore.getState().lightSourceRevision).toBe(0);
+    });
+
+    test("rebuilds model and light-source batches only for an emitting model", () => {
+        const inventory = emptyInventory();
+        inventory[0] = {itemId: "floor_lamp", count: 1};
+        useStore.setState({inventory, survivalInventory: inventory, selectedHotbar: 0});
+        expect(useStore.getState().addCube(1, 1, 1)).toBe(true);
+        expect(useStore.getState().modelRevision).toBe(1);
+        expect(useStore.getState().lightSourceRevision).toBe(1);
     });
 
     test("stores slab half and stair facing during placement", () => {
@@ -446,6 +476,28 @@ describe("world store", () => {
         expect(useStore.getState().removeCube(0, 1, 0)).toBe(true);
         expect(useStore.getState().inventory[0].durability).toBe(29);
         expect(useStore.getState().drops).toHaveLength(0);
+    });
+
+    test("keeps an exhausted tool selected when the mined block is collected", () => {
+        const inventory = emptyInventory();
+        inventory[0] = {itemId: "wooden_axe", count: 1, durability: 1};
+        let chunks = setBlock(new Map(), [0, 0, 0], "stone");
+        chunks = setBlock(chunks, [0, 1, 0], "log");
+        useStore.setState({
+            inventory,
+            survivalInventory: inventory,
+            selectedHotbar: 0,
+            chunks,
+            drops: [],
+            playerPosition: [0, 1, 0],
+        });
+
+        expect(useStore.getState().removeCube(0, 1, 0)).toBe(true);
+        expect(useStore.getState().inventory[0]).toMatchObject({itemId: "wooden_axe", durability: 30});
+        useStore.getState().updateDrops(Date.now());
+
+        expect(useStore.getState().inventory[0]).toMatchObject({itemId: "wooden_axe", durability: 30});
+        expect(useStore.getState().inventory[1]).toEqual({itemId: "log", count: 1});
     });
 
     test("processes a placed furnace entity", () => {

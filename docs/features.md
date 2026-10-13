@@ -204,7 +204,7 @@ Water depends on chunking, transparent block rendering, and block property suppo
 
 4. **Add tool durability**
    - Reduce durability when a tool is used successfully.
-   - Break the item when durability reaches zero.
+   - Renew the item when durability reaches zero so permanent tools remain available.
    - Display durability on the hotbar icon.
 
 5. **Add furnaces and smelting**

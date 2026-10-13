@@ -31,6 +31,11 @@ export function damageTool(slots, index) {
         return next;
     }
     const durability = (stack.durability ?? item.maxDurability) - 1;
-    next[index] = durability > 0 ? {...stack, durability, wear} : null;
+    // Tools are permanent inventory choices in this building-focused game. Renew
+    // an exhausted tool instead of clearing its slot, which could make the next
+    // auto-collected block appear to replace the tool.
+    next[index] = durability > 0
+        ? {...stack, durability, wear}
+        : {...stack, durability: item.maxDurability, wear: 0};
     return next;
 }

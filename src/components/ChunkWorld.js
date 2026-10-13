@@ -127,7 +127,14 @@ function breakingParts(breaking, chunks, blockStates) {
 const BreakingOverlay = ({breaking}) => {
     const chunks = useStore((state) => state.chunks);
     const blockStates = useStore((state) => state.blockStates);
+    const materials = useRef([]);
     const parts = useMemo(() => breakingParts(breaking, chunks, blockStates), [breaking, blockStates, chunks]);
+    useFrame(() => {
+        const progress = Math.min(1, (performance.now() - breaking.startedAt) / breaking.duration);
+        materials.current.forEach((material) => {
+            if (material) material.opacity = 0.15 + progress * 0.6;
+        });
+    });
 
     return (
         <group position={breaking.position} raycast={() => null}>
@@ -139,9 +146,10 @@ const BreakingOverlay = ({breaking}) => {
                 >
                     <boxGeometry />
                     <meshBasicMaterial
+                        ref={(material) => { materials.current[index] = material; }}
                         color="white"
                         depthWrite={false}
-                        opacity={0.15 + breaking.progress * 0.6}
+                        opacity={0.15}
                         transparent
                         wireframe
                     />
@@ -311,7 +319,7 @@ export const ChunkWorld = () => {
     const interactBlock = useStore((state) => state.interactBlock);
     const selectedItemAction = useStore((state) => state.applySelectedItemToBlock);
     const bridgeAnchor = useStore((state) => state.bridgeAnchor);
-    const chunks = useStore((state) => state.chunks);
+    const bridgeChunks = useStore((state) => state.bridgeAnchor ? state.chunks : null);
     const bridgeStyle = useStore((state) => {
         const stack = state.inventory[state.selectedHotbar];
         return stack ? ITEM_BY_ID[stack.itemId]?.bridgeStyle ?? null : null;
@@ -379,7 +387,7 @@ export const ChunkWorld = () => {
             breakingRelease.current = null;
         }
         if (breakingTimer.current !== null) {
-            window.clearInterval(breakingTimer.current);
+            window.clearTimeout(breakingTimer.current);
             breakingTimer.current = null;
         }
         setBreaking(null);
@@ -403,17 +411,12 @@ export const ChunkWorld = () => {
         const duration = currentState.gameMode === "creative"
             ? MIN_BREAK_HOLD_MS
             : Math.max(MIN_BREAK_HOLD_MS, miningDuration(blockId, currentState.inventory[currentState.selectedHotbar]));
-        setBreaking({position, blockId, progress: 0.05});
+        setBreaking({position, blockId, startedAt, duration});
 
-        breakingTimer.current = window.setInterval(() => {
-            const progress = (performance.now() - startedAt) / duration;
-            if (progress >= 1) {
-                cancelBreaking();
-                removeCubeSafely(...position);
-                return;
-            }
-            setBreaking({position, blockId, progress});
-        }, 30);
+        breakingTimer.current = window.setTimeout(() => {
+            cancelBreaking();
+            removeCubeSafely(...position);
+        }, duration);
     }, [cancelBreaking, interactBlock, removeCubeSafely]);
 
     useEffect(() => () => cancelBreaking(), [cancelBreaking]);
@@ -516,7 +519,7 @@ export const ChunkWorld = () => {
             })}
             <ModelObjects onPointerDown={handlePointerDown} onPointerOut={cancelBreaking}/>
             {breaking && <BreakingOverlay breaking={breaking}/>}
-            <BridgePreview anchor={bridgeAnchor} hover={bridgeHover} chunks={chunks}/>
+            <BridgePreview anchor={bridgeAnchor} hover={bridgeHover} chunks={bridgeChunks}/>
         </>
     );
 };

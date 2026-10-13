@@ -6,6 +6,7 @@ import {
     chunkCoordinate,
     columnKey,
     getBlock,
+    locateBlock,
     neighboringChunkKeys,
     parseChunkKey,
     setBlock,
@@ -48,7 +49,7 @@ import {
     spawnFishForColumn,
     updateCreature
 } from "../world/entities";
-import {rebuildBlockLight} from "../world/lighting";
+import {emittedLight, rebuildBlockLight, updateBlockLightInPlace} from "../world/lighting";
 import {
     createChest,
     growCrop,
@@ -190,6 +191,24 @@ function activeKeys(chunks, centerX, centerZ, distance) {
         .sort();
 }
 
+function activeKeysAfterEdits(currentKeys, chunks, centerX, centerZ, distance, positions) {
+    const visibleColumns = new Set(renderColumnOffsets(distance).map(([x, z]) => `${centerX + x},${centerZ + z}`));
+    const editedKeys = new Set(positions.map((position) => locateBlock(position).chunkKey));
+    const next = new Set(currentKeys);
+    let changed = false;
+    editedKeys.forEach((key) => {
+        const [chunkX, , chunkZ] = parseChunkKey(key);
+        const shouldBeActive = visibleColumns.has(columnKey(chunkX, chunkZ)) && chunks.has(key);
+        if (shouldBeActive && !next.has(key)) {
+            next.add(key);
+            changed = true;
+        } else if (!shouldBeActive && next.delete(key)) {
+            changed = true;
+        }
+    });
+    return changed ? Array.from(next).sort() : currentKeys;
+}
+
 function initialState() {
     const saved = readWorld();
     const seed = saved?.seed ?? DEFAULT_WORLD_SEED;
@@ -242,6 +261,8 @@ function initialState() {
         blockStates: saved?.blockStates ?? new Map(),
         scheduledUpdates: saved?.scheduledUpdates ?? [],
         blockLight: rebuildBlockLight(saved?.chunks ?? new Map()),
+        lightSourceRevision: 0,
+        modelRevision: 0,
         station: null,
         stationPosition: null,
         entities,
@@ -499,6 +520,7 @@ export const useStore = create((set, get) => ({
                             generatedColumns,
                             chunkRevisions,
                             blockLight,
+                            lightSourceRevision: state.lightSourceRevision + 1,
                             entities,
                             spawnedCreatureGroups,
                             ...(structureIsNew ? {
@@ -533,20 +555,30 @@ export const useStore = create((set, get) => ({
         }
 
         set((state) => {
-            let chunks = setBlock(state.chunks, position, item.blockId);
-            const fluidLevels = new Map(state.fluidLevels);
-            const blockEntities = new Map(state.blockEntities);
-            const blockStates = new Map(state.blockStates);
+            const changedPositions = placingDoor ? [position, upperPosition] : [position];
+            const chunks = setBlocks(state.chunks, changedPositions.map((changedPosition, index) => ({
+                position: changedPosition,
+                blockId: index === 0 ? item.blockId : "door_top",
+            })));
+            const definition = BLOCK_BY_ID[item.blockId];
+            let fluidLevels = state.fluidLevels;
+            let blockEntities = state.blockEntities;
+            let blockStates = state.blockStates;
             if (item.blockId === "furnace") {
+                blockEntities = new Map(blockEntities);
                 blockEntities.set(positionKey(position), createFurnace());
             }
             if (item.blockId === "chest") {
+                blockEntities = new Map(blockEntities);
                 blockEntities.set(positionKey(position), createChest());
             }
-            const definition = BLOCK_BY_ID[item.blockId];
-            if (definition?.fluid) fluidLevels.set(positionKey(position), 0);
+            if (definition?.fluid) {
+                fluidLevels = new Map(fluidLevels);
+                fluidLevels.set(positionKey(position), 0);
+            }
             const usesHalf = definition?.shape === "slab" || definition?.shape === "stairs";
             if (definition?.oriented || usesHalf) {
+                blockStates = new Map(blockStates);
                 blockStates.set(positionKey(position), {
                     facing,
                     open: false,
@@ -555,26 +587,29 @@ export const useStore = create((set, get) => ({
                 });
             }
             if (placingDoor) {
-                chunks = setBlock(chunks, upperPosition, "door_top");
+                if (blockStates === state.blockStates) blockStates = new Map(blockStates);
                 blockStates.set(positionKey(upperPosition), {facing, open: false, powered: false});
             }
-            const changedPositions = placingDoor ? [position, upperPosition] : [position];
             return {
                 chunks,
                 blockEntities,
                 blockStates,
-                blockLight: rebuildBlockLight(chunks),
+                modelRevision: state.modelRevision + (definition?.modelId ? 1 : 0),
+                lightSourceRevision: state.lightSourceRevision + (emittedLight(item.blockId) ? 1 : 0),
+                blockLight: updateBlockLightInPlace(chunks, state.blockLight, changedPositions),
                 soundEvent: {id: nanoid(), type: "place", blockId: item.blockId},
                 particleEvent: {id: nanoid(), type: "place", position},
                 goals: {...state.goals, blocksPlaced: (state.goals.blocksPlaced ?? 0) + 1},
                 fluidLevels,
                 fluidQueue: state.fluidQueue,
                 chunkRevisions: bumpRevisions(state.chunkRevisions, changedPositions.flatMap(affectedChunkKeys)),
-                activeChunkKeys: activeKeys(
+                activeChunkKeys: activeKeysAfterEdits(
+                    state.activeChunkKeys,
                     chunks,
                     state.playerChunk[0],
                     state.playerChunk[1],
-                    state.renderDistance
+                    state.renderDistance,
+                    changedPositions
                 ),
             };
         });
@@ -612,9 +647,18 @@ export const useStore = create((set, get) => ({
         set({
             chunks,
             bridgeAnchor: null,
-            blockLight: rebuildBlockLight(chunks),
+            blockLight: updateBlockLightInPlace(chunks, state.blockLight, plan.placements.map(({position: planned}) => planned)),
+            lightSourceRevision: state.lightSourceRevision
+                + (plan.placements.some(({blockId}) => emittedLight(blockId)) ? 1 : 0),
             chunkRevisions: bumpRevisions(state.chunkRevisions, revisedKeys),
-            activeChunkKeys: activeKeys(chunks, state.playerChunk[0], state.playerChunk[1], state.renderDistance),
+            activeChunkKeys: activeKeysAfterEdits(
+                state.activeChunkKeys,
+                chunks,
+                state.playerChunk[0],
+                state.playerChunk[1],
+                state.renderDistance,
+                plan.placements.map(({position: planned}) => planned)
+            ),
             goals: {...state.goals, blocksPlaced: (state.goals.blocksPlaced ?? 0) + plan.placements.length},
             soundEvent: {id: nanoid(), type: "place", blockId: plan.placements[0]?.blockId ?? "wood"},
             particleEvent: {id: nanoid(), type: "place", position: endpoint},
@@ -645,10 +689,10 @@ export const useStore = create((set, get) => ({
             : [position];
 
         set((state) => {
-            let chunks = state.chunks;
-            removedPositions.forEach((removed) => { chunks = setBlock(chunks, removed, null); });
-            const fluidLevels = new Map(state.fluidLevels);
-            removedPositions.forEach((removed) => fluidLevels.delete(positionKey(removed)));
+            const chunks = setBlocks(state.chunks, removedPositions.map((removed) => ({position: removed, blockId: null})));
+            const removesFluidState = removedPositions.some((removed) => state.fluidLevels.has(positionKey(removed)));
+            const fluidLevels = removesFluidState ? new Map(state.fluidLevels) : state.fluidLevels;
+            if (removesFluidState) removedPositions.forEach((removed) => fluidLevels.delete(positionKey(removed)));
             const selectedStack = state.inventory[state.selectedHotbar];
             const itemId = miningDrop(blockId, selectedStack);
             let drops = state.gameMode === "survival" && itemId
@@ -660,9 +704,10 @@ export const useStore = create((set, get) => ({
                     createdAt: Date.now(),
                 }]
                 : state.drops;
-            const blockEntities = new Map(state.blockEntities);
+            let blockEntities = state.blockEntities;
             const entity = blockEntities.get(positionKey(position));
             if (entity) {
+                blockEntities = new Map(blockEntities);
                 const stored = entity.type === "chest" ? entity.slots : [entity.input, entity.fuel, entity.output];
                 stored.filter(Boolean).forEach((stack) => {
                     drops = [...drops, {
@@ -672,8 +717,9 @@ export const useStore = create((set, get) => ({
                 });
                 blockEntities.delete(positionKey(position));
             }
-            const blockStates = new Map(state.blockStates);
-            removedPositions.forEach((removed) => blockStates.delete(positionKey(removed)));
+            const removesBlockState = removedPositions.some((removed) => state.blockStates.has(positionKey(removed)));
+            const blockStates = removesBlockState ? new Map(state.blockStates) : state.blockStates;
+            if (removesBlockState) removedPositions.forEach((removed) => blockStates.delete(positionKey(removed)));
             const inventory = state.gameMode === "survival"
                 ? damageTool(state.inventory, state.selectedHotbar)
                 : state.inventory;
@@ -684,18 +730,22 @@ export const useStore = create((set, get) => ({
                 survivalInventory: state.gameMode === "survival" ? inventory : state.survivalInventory,
                 blockEntities,
                 blockStates,
-                blockLight: rebuildBlockLight(chunks),
+                modelRevision: state.modelRevision + (BLOCK_BY_ID[blockId]?.modelId ? 1 : 0),
+                lightSourceRevision: state.lightSourceRevision + (emittedLight(blockId) ? 1 : 0),
+                blockLight: updateBlockLightInPlace(chunks, state.blockLight, removedPositions),
                 soundEvent: {id: nanoid(), type: "break", blockId},
                 particleEvent: {id: nanoid(), type: "break", position},
                 goals: {...state.goals, blocksMined: (state.goals.blocksMined ?? 0) + 1},
                 fluidLevels,
                 fluidQueue: state.fluidQueue,
                 chunkRevisions: bumpRevisions(state.chunkRevisions, removedPositions.flatMap(affectedChunkKeys)),
-                activeChunkKeys: activeKeys(
+                activeChunkKeys: activeKeysAfterEdits(
+                    state.activeChunkKeys,
                     chunks,
                     state.playerChunk[0],
                     state.playerChunk[1],
-                    state.renderDistance
+                    state.renderDistance,
+                    removedPositions
                 ),
             };
         });
@@ -771,11 +821,13 @@ export const useStore = create((set, get) => ({
             fluidLevels: result.fluidLevels,
             fluidQueue: result.fluidQueue,
             chunkRevisions: bumpRevisions(state.chunkRevisions, revisedKeys),
-            activeChunkKeys: activeKeys(
+            activeChunkKeys: activeKeysAfterEdits(
+                state.activeChunkKeys,
                 result.chunks,
                 state.playerChunk[0],
                 state.playerChunk[1],
-                state.renderDistance
+                state.renderDistance,
+                result.changedPositions
             ),
         }));
     },
@@ -889,7 +941,7 @@ export const useStore = create((set, get) => ({
             set({
                 chunks: toggled.chunks,
                 blockStates,
-                blockLight: rebuildBlockLight(toggled.chunks),
+                blockLight: updateBlockLightInPlace(toggled.chunks, state.blockLight, toggled.positions),
                 chunkRevisions: bumpRevisions(state.chunkRevisions, toggled.positions.flatMap(affectedChunkKeys)),
                 soundEvent: {id: nanoid(), type: "toggle", blockId},
             });
@@ -905,7 +957,8 @@ export const useStore = create((set, get) => ({
             set({
                 chunks: propagated.chunks,
                 blockStates,
-                blockLight: rebuildBlockLight(propagated.chunks),
+                blockLight: updateBlockLightInPlace(propagated.chunks, state.blockLight, [position, ...propagated.changed]),
+                lightSourceRevision: state.lightSourceRevision + (propagated.changed.length ? 1 : 0),
                 chunkRevisions: bumpRevisions(state.chunkRevisions, revised),
                 soundEvent: {id: nanoid(), type: "switch"},
                 particleEvent: {id: nanoid(), type: "power", position},
@@ -1033,7 +1086,7 @@ export const useStore = create((set, get) => ({
             }
         });
         if (!changed.length) return {scheduledUpdates: pending};
-        return {chunks, scheduledUpdates: pending, blockLight: rebuildBlockLight(chunks), chunkRevisions: bumpRevisions(state.chunkRevisions, changed.flatMap(affectedChunkKeys))};
+        return {chunks, scheduledUpdates: pending, blockLight: updateBlockLightInPlace(chunks, state.blockLight, changed), chunkRevisions: bumpRevisions(state.chunkRevisions, changed.flatMap(affectedChunkKeys))};
     }),
 
     setCraftingGrid: (kind, grid) => {

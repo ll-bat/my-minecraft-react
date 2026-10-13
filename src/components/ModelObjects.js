@@ -97,12 +97,13 @@ const ModelBatch = ({block, instances, onPointerDown, onPointerOut}) => {
 };
 
 export const ModelObjects = ({onPointerDown, onPointerOut}) => {
-    const chunks = useStore((state) => state.chunks);
     const activeChunkKeys = useStore((state) => state.activeChunkKeys);
-    const blockStates = useStore((state) => state.blockStates);
+    const modelRevision = useStore((state) => state.modelRevision);
     const playerChunk = useStore((state) => state.playerChunk);
     const renderDistance = useStore((state) => state.renderDistance);
     const batches = useMemo(() => {
+        if (!Number.isFinite(modelRevision)) return new Map();
+        const {chunks, blockStates} = useStore.getState();
         const grouped = new Map();
         const modelDistance = renderDistance >= 6 ? 4 : renderDistance;
         activeChunkKeys.forEach((key) => {
@@ -111,7 +112,6 @@ export const ModelObjects = ({onPointerDown, onPointerOut}) => {
             const chunk = parseChunkKey(key);
             if (Math.max(Math.abs(chunk[0] - playerChunk[0]), Math.abs(chunk[2] - playerChunk[1])) > modelDistance) return;
             modelsInChunk(chunkMap, chunk).forEach(({blockId, position}) => {
-                const block = BLOCK_BY_ID[blockId];
                 const state = blockStates.get(positionKey(position)) ?? {};
                 const entries = grouped.get(blockId) ?? [];
                 entries.push({position, facing: state.facing ?? "north"});
@@ -119,7 +119,7 @@ export const ModelObjects = ({onPointerDown, onPointerOut}) => {
             });
         });
         return grouped;
-    }, [activeChunkKeys, blockStates, chunks, playerChunk, renderDistance]);
+    }, [activeChunkKeys, modelRevision, playerChunk, renderDistance]);
 
     return Array.from(batches, ([blockId, instances]) => (
         <ModelBatch

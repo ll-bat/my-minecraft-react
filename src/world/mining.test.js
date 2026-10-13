@@ -16,8 +16,12 @@ describe("mining", () => {
         expect(miningDrop("coal_ore", woodPick)).toBe("coal");
     });
 
-    test("damages and eventually removes a tool", () => {
+    test("damages and renews a tool without clearing its slot", () => {
         expect(damageTool([woodPick], 0)[0].durability).toBe(29);
-        expect(damageTool([{...woodPick, durability: 1}], 0)[0]).toBeNull();
+        expect(damageTool([{...woodPick, durability: 1, wear: 29}], 0)[0]).toEqual({
+            ...woodPick,
+            durability: 30,
+            wear: 0,
+        });
     });
 });

@@ -35,7 +35,7 @@ Phase 6 adds data-driven crafting, tool-aware mining, durability, and persistent
 ## 5. Add durability
 
 - Damage the selected tool after a successful survival-mode block break.
-- Remove a tool when its durability reaches zero.
+- Renew a tool when its durability reaches zero so permanent inventory tools stay in their slots.
 - Display remaining durability on inventory and hotbar icons.
 - Keep creative-mode tools undamaged.
 

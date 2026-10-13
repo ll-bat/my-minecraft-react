@@ -28,7 +28,7 @@
 | --- | --- |
 | **Left mouse button** | Place the selected block against the targeted face or use the selected placement item. When a pickaxe, axe, or shovel is selected, remove the targeted block, fluid, creature, or vehicle immediately instead. |
 | **Right mouse button — short click** | Use the targeted block. Opens crafting tables, furnaces, and chests; toggles doors, trapdoors, and switches; harvests mature crops; and rests in a bed at night. |
-| **Right mouse button — hold** | Break the targeted block. Matching tools break blocks faster and lose durability in survival. Bedrock and unsupported solid blocks with empty space directly below cannot be broken. |
+| **Right mouse button — hold** | Break the targeted block. Matching tools break blocks faster and lose durability in survival; an exhausted tool renews automatically and stays in its slot. Bedrock and unsupported solid blocks with empty space directly below cannot be broken. |
 | **Place Wooden Door** | Places one coordinated structure two blocks high. Both halves open, close, and break together. Placement requires two empty vertical spaces. |
 | **Place Framed Window** | Places a one-block window with a solid wooden border and transparent central pane. |
 | **Place a slab or stair** | Clicking the upper half of a side or the underside of a block places an upper shape; other faces place a lower shape. Stairs face the camera direction. |

@@ -72,12 +72,14 @@ export const InteractionFeedback = () => {
 };
 
 export const WorldLights = () => {
-    const chunks = useStore((state) => state.chunks);
-    const levels = useStore((state) => state.blockLight);
+    const lightSourceRevision = useStore((state) => state.lightSourceRevision);
+    const worldId = useStore((state) => state.worldId);
     const playerChunk = useStore((state) => state.playerChunk);
-    const allSources = useMemo(() => lightSources(levels, 14).filter(({position}) => (
-        emittedLight(getBlock(chunks, position)) > 0
-    )), [chunks, levels]);
+    const allSources = useMemo(() => {
+        if (!Number.isFinite(lightSourceRevision) || !Number.isFinite(worldId)) return [];
+        const {chunks, blockLight} = useStore.getState();
+        return lightSources(blockLight, 14).filter(({position}) => emittedLight(getBlock(chunks, position)) > 0);
+    }, [lightSourceRevision, worldId]);
     const sources = useMemo(() => {
         const playerX = playerChunk[0] * 16 + 8;
         const playerZ = playerChunk[1] * 16 + 8;

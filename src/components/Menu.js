@@ -1,5 +1,6 @@
 import {useEffect, useState} from "react";
 import {useStore} from "../hooks/useStore";
+import {DAY_PERIODS, dayPeriodForWorldTime, WEATHER_OPTIONS} from "../world/sky";
 
 export const Menu = () => {
     const worldSeed = useStore((state) => state.seed);
@@ -14,6 +15,10 @@ export const Menu = () => {
     const toggleWorldManager = useStore((state) => state.toggleWorldManager);
     const toggleMap = useStore((state) => state.toggleMap);
     const togglePacks = useStore((state) => state.togglePacks);
+    const worldTime = useStore((state) => state.worldTime);
+    const setDayPeriod = useStore((state) => state.setDayPeriod);
+    const skyWeather = useStore((state) => state.skyWeather);
+    const setSkyWeather = useStore((state) => state.setSkyWeather);
     const [seed, setSeed] = useState(worldSeed);
 
     useEffect(() => setSeed(worldSeed), [worldSeed]);
@@ -46,6 +51,22 @@ export const Menu = () => {
             <button type="button" onClick={toggleWorldManager}>Worlds</button>
             <button type="button" onClick={toggleMap}>Map</button>
             <button type="button" onClick={togglePacks}>Packs</button>
+            <label>
+                Time
+                <select value={dayPeriodForWorldTime(worldTime)} onChange={(event) => setDayPeriod(event.target.value)}>
+                    {DAY_PERIODS.map((period) => (
+                        <option key={period.id} value={period.id}>{period.label}</option>
+                    ))}
+                </select>
+            </label>
+            <label>
+                Weather
+                <select value={skyWeather} onChange={(event) => setSkyWeather(event.target.value)}>
+                    {WEATHER_OPTIONS.map((weather) => (
+                        <option key={weather.id} value={weather.id}>{weather.label}</option>
+                    ))}
+                </select>
+            </label>
             <label>
                 Mode
                 <select value={gameMode} onChange={(event) => setGameMode(event.target.value)}>

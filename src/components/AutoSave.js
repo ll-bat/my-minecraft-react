@@ -26,6 +26,7 @@ export const PERSISTENT_WORLD_KEYS = [
     "blockStates",
     "scheduledUpdates",
     "worldTime",
+    "skyWeather",
     "dimension",
     "dimensionSnapshots",
     "exploredColumns",

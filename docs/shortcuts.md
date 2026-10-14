@@ -82,10 +82,12 @@ These controls appear in the menu at the top of the game.
 | --- | --- |
 | **Seed field** | Enter a numeric or text seed for deterministic world generation. The field does not change the active world until **New world** is selected. |
 | **New world** | Permanently delete the current world's saved progress, replace it with fresh terrain from the Seed field, and immediately save the clean baseline. Other world slots remain untouched. |
-| **Save** | Save immediately. The game also saves persistent progress automatically every 2.5 seconds and when the page is hidden or refreshed. On startup, the active world is restored from localStorage. |
+| **Save** | Save immediately. The game also saves persistent progress to PostgreSQL automatically every 2.5 seconds and when the page is hidden or refreshed. On startup, the active world is restored from the backend. |
 | **Regenerate** | Permanently delete the current world's saved progress, recreate its original terrain from the same seed, and immediately save the clean baseline. Other world slots remain untouched. |
 | **Mode** | Switch between survival inventory rules and the creative item catalog. |
 | **View** | Change the streamed render distance from 1 (Low) through 4 (Ultra), 6 (Extra), or 9 (Extra 2x). Ultra remains the default. |
+| **Time** | Select Morning, Noon, Evening, or Night. Choosing a period pauses the automatic day cycle at that period; it can be enabled again in Worlds settings. |
+| **Weather** | Select Sunny, Partly cloudy, Cloudy, Rainy, Snowy, or Windy. Weather also advances automatically through natural neighboring conditions every 5–10 minutes, with a gradual visual transition. A manual selection restarts that interval. |
 | **Worlds** | Create, open, duplicate, export, import, or delete isolated worlds and configure current world rules. |
 | **Map** | Open the explored map, marker list, compass readout, biome discoveries, structures, and goals. |
 | **Packs** | Validate and enable a version-1 JSON data pack with namespaced blocks and recipes. |

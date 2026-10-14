@@ -26,6 +26,7 @@ describe("world storage", () => {
             blockStates: new Map([["4,5,6", {facing: "west", half: "upper", open: false, powered: true}]]),
             scheduledUpdates: [scheduleCrop([5, 6, 7], 1000)],
             worldTime: 180,
+            skyWeather: "rain",
             entities: [{
                 id: "saved-sheep", type: "sheep", position: [4, 8, 4], velocity: [0, 0, 0], health: 10,
                 animationState: "idle", heading: 0, friendLevel: 2, followUntil: 0,
@@ -48,6 +49,7 @@ describe("world storage", () => {
         expect(parsed.blockStates.get("4,5,6").half).toBe("upper");
         expect(parsed.scheduledUpdates[0].position).toEqual([5, 6, 7]);
         expect(parsed.worldTime).toBe(180);
+        expect(parsed.skyWeather).toBe("rain");
         expect(parsed.entities[0].friendLevel).toBe(2);
         expect(parsed.spawnedCreatureGroups.has("0,0:day")).toBe(true);
         expect(parsed.renderDistance).toBe(4);

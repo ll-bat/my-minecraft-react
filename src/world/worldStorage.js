@@ -7,6 +7,7 @@ import {createFurnace} from "./furnaces";
 import {validCreature} from "./entities";
 import {createChest} from "./interactions";
 import {ACTIVE_WORLD_KEY, readCatalog, upsertWorld, worldDocumentKey} from "./worldCatalog";
+import {normalizeWeather} from "./sky";
 
 export const WORLD_STORAGE_KEY = "minecraft-react-world";
 export const LEGACY_STORAGE_KEY = "cubes";
@@ -184,6 +185,7 @@ function legacyWorld(cubes) {
         blockStates: new Map(),
         scheduledUpdates: [],
         worldTime: 0,
+        skyWeather: "sunny",
         entities: [],
         spawnedCreatureGroups: new Set(),
         chunks,
@@ -274,6 +276,7 @@ export function parseWorldDocument(serialized, legacySerialized = null) {
                     .map((update) => ({...update, position: [...update.position]}))
                 : [],
             worldTime: Number.isFinite(document.worldTime) ? Math.max(0, document.worldTime) : 0,
+            skyWeather: normalizeWeather(document.skyWeather),
             dimension: document.dimension === "dream_grove" ? "dream_grove" : "overworld",
             dimensionSnapshots: new Map(Array.isArray(document.dimensionSnapshots)
                 ? document.dimensionSnapshots.map(([id, value]) => [id, normalizeSnapshot(value)]).filter(([, value]) => value)
@@ -332,6 +335,7 @@ export function serializeWorld(state) {
         blockStates: Array.from(state.blockStates ?? []),
         scheduledUpdates: state.scheduledUpdates ?? [],
         worldTime: state.worldTime ?? 0,
+        skyWeather: normalizeWeather(state.skyWeather),
         dimension: state.dimension ?? "overworld",
         dimensionSnapshots: Array.from(state.dimensionSnapshots ?? [], ([id, value]) => [id, serializeSnapshot(value)]),
         exploredColumns: Array.from(state.exploredColumns ?? []),

@@ -74,6 +74,7 @@ import {
     persistenceChunkKey,
     remoteDocument
 } from "../world/remoteWorld";
+import {nextMorningWorldTime, normalizeWeather, worldTimeForDayPeriod} from "../world/sky";
 
 export {WORLD_STORAGE_KEY};
 
@@ -305,6 +306,7 @@ function initialState() {
         entities,
         spawnedCreatureGroups,
         worldTime: saved?.worldTime ?? 0,
+        skyWeather: normalizeWeather(saved?.skyWeather),
         dimension: saved?.dimension ?? "overworld",
         dimensionSnapshots: saved?.dimensionSnapshots ?? new Map(),
         exploredColumns: saved?.exploredColumns ?? new Set(),
@@ -975,8 +977,7 @@ export const useStore = create((set, get) => ({
                 set({interactionFeedback: "You can rest when night arrives"});
                 return true;
             }
-            const nextMorning = (Math.floor(state.worldTime / 360) + 1) * 360;
-            set({worldTime: nextMorning, interactionFeedback: "You rested until morning", soundEvent: {id: nanoid(), type: "rest"}});
+            set({worldTime: nextMorningWorldTime(state.worldTime), interactionFeedback: "You rested until morning", soundEvent: {id: nanoid(), type: "rest"}});
             return true;
         }
         if (blockId === "portal") {
@@ -1229,6 +1230,16 @@ export const useStore = create((set, get) => ({
         });
         return {worldTime, entities, spawnedCreatureGroups};
     }),
+    setDayPeriod: (period) => {
+        const state = get();
+        set({gameRules: {...state.gameRules, dayCycle: false}});
+        get().setWorldTime(worldTimeForDayPeriod(period, state.worldTime));
+    },
+    setSkyWeather: (skyWeather, transitionSeconds = 2) => set((state) => ({
+        skyWeather: normalizeWeather(skyWeather),
+        skyWeatherTransitionSeconds: Math.max(0, Number(transitionSeconds) || 0),
+        gameRules: {...state.gameRules, weather: true},
+    })),
 
     updateCreatures: (now = Date.now(), deltaSeconds = 0.2) => set((state) => {
         let entities = uniqueEntities(state.entities).map((entity) => updateCreature(entity, state, now, deltaSeconds));
@@ -1452,6 +1463,7 @@ export const useStore = create((set, get) => ({
             entities: [],
             spawnedCreatureGroups: new Set(),
             worldTime: saved.worldTime ?? 0,
+            skyWeather: normalizeWeather(saved.skyWeather),
             dimension: saved.dimension ?? "overworld",
             dimensionSnapshots: saved.dimensionSnapshots ?? new Map(),
             exploredColumns: new Set((payload.exploredColumns ?? []).map((item) => `${item.dimension}:${item.chunkX},${item.chunkZ}`)),
@@ -1633,6 +1645,7 @@ export const useStore = create((set, get) => ({
             entities: [],
             spawnedCreatureGroups: new Set(),
             worldTime: 0,
+            skyWeather: "sunny",
             dimension: "overworld",
             dimensionSnapshots: new Map(),
             exploredColumns: new Set(),
@@ -1721,7 +1734,7 @@ export const useStore = create((set, get) => ({
             chunks: new Map(), generatedColumns: new Set(), fluidLevels: new Map(), blockEntities: new Map(),
             blockStates: new Map(), scheduledUpdates: [], entities: [], spawnedCreatureGroups: new Set(),
             dimensionSnapshots: new Map(), exploredColumns: new Set(), discoveredBiomes: new Set(),
-            discoveredStructures: [], markers: generatedWorldMarkers(seed), goals: {}, worldTime: 0,
+            discoveredStructures: [], markers: generatedWorldMarkers(seed), goals: {}, worldTime: 0, skyWeather: "sunny",
             inventory: creativeInventory(), survivalInventory: creativeInventory(), enabledPacks: [],
         });
         await worldApi.create({id: worldUid, name: String(name).trim() || "New World", seed, settings: {document}, player: {position, positionVersion: 0, state: {mountedEntityId: null}}});

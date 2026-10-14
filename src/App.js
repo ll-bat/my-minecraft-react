@@ -1,4 +1,5 @@
 import {Canvas} from "@react-three/fiber";
+import {Suspense} from "react";
 import {Physics} from "@react-three/cannon";
 import {Player} from "./components/Player";
 import {FPV} from "./components/FPV";
@@ -26,7 +27,7 @@ function App() {
             <AutoSave/>
             <Canvas onContextMenu={(event) => event.preventDefault()}>
                 <RenderingDiagnostics/>
-                <WorldEnvironment/>
+                <Suspense fallback={null}><WorldEnvironment/></Suspense>
                 <WorldLights/>
                 <AmbientSky/>
                 <FPV/>

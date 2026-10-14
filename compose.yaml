@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: minecraft
+      POSTGRES_USER: minecraft
+      POSTGRES_PASSWORD: minecraft
+    ports:
+      - "5432:5432"
+    volumes:
+      - minecraft-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U minecraft -d minecraft"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  minecraft-postgres:

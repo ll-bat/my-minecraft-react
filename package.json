@@ -18,6 +18,13 @@
     "zustand": "^4.1.1"
   },
   "scripts": {
+    "dev": "concurrently -k -n client,server -c cyan,green \"npm start\" \"npm run server:dev\"",
+    "server:dev": "npm --prefix server run dev",
+    "server:build": "npm --prefix server run build",
+    "server:start": "npm --prefix server run start",
+    "db:generate": "npm --prefix server run db:generate",
+    "db:migrate": "npm --prefix server run db:migrate",
+    "db:deploy": "npm --prefix server run db:deploy",
     "assets:build": "python3 scripts/build_models.py && python3 scripts/build_creature_models.py && python3 scripts/build_watercraft_models.py && python3 scripts/build_texture_atlases.py",
     "assets:validate": "python3 scripts/validate_visual_assets.py",
     "start": "react-scripts start",
@@ -25,6 +32,10 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "proxy": "http://localhost:4000",
   "eslintConfig": {
     "extends": [
       "react-app",

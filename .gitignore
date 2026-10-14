@@ -2,6 +2,9 @@
 
 # dependencies
 /node_modules
+/server/node_modules
+/server/generated
+/server/dist
 /.pnp
 .pnp.js
 
@@ -18,6 +21,8 @@ __pycache__/
 # misc
 .DS_Store
 .env.local
+.env
+/server/.env
 .env.development.local
 .env.test.local
 .env.production.local

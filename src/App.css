@@ -688,3 +688,15 @@
 .exploration-map span { aspect-ratio: 1; background: #191b1c; }
 .exploration-map span.visited { background: #6e9b55; }
 .exploration-map span.current { background: #ffe06b; box-shadow: 0 0 0 2px white; }
+.persistence-gate {
+    align-items: center;
+    background: linear-gradient(#82b9dd, #d9e8be);
+    color: #18251b;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    justify-content: center;
+    text-align: center;
+}
+
+.persistence-gate button { padding: 0.65rem 1.2rem; }

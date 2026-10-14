@@ -2,8 +2,7 @@ import {useEffect, useState} from "react";
 import {useStore} from "../hooks/useStore";
 import {biomeAt} from "../world/terrain";
 import {lightAt} from "../world/lighting";
-import {deleteWorldRecord, duplicateWorldRecord, exportWorldRecord, importWorldRecord, readCatalog} from "../world/worldCatalog";
-import {selectWorld} from "../world/worldStorage";
+import {worldApi} from "../api/worldApi";
 
 export const AdvancedShortcuts = () => {
     const toggleDebug = useStore((state) => state.toggleDebug);
@@ -94,23 +93,36 @@ export const WorldManager = () => {
     const close = useStore((state) => state.toggleWorldManager);
     const activeId = useStore((state) => state.worldUid);
     const createWorld = useStore((state) => state.createManagedWorld);
+    const openWorld = useStore((state) => state.openRemoteWorld);
+    const refreshWorlds = useStore((state) => state.refreshWorlds);
+    const saveWorld = useStore((state) => state.saveWorld);
+    const worlds = useStore((state) => state.worlds);
     const gameRules = useStore((state) => state.gameRules);
     const setGameRule = useStore((state) => state.setGameRule);
-    const [worlds, setWorlds] = useState(readCatalog());
     const [name, setName] = useState("New World");
     const [seed, setSeed] = useState("");
     const [importText, setImportText] = useState("");
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState("");
+    useEffect(() => { if (open) refreshWorlds().catch((value) => setError(value.message)); }, [open, refreshWorlds]);
     if (!open) return null;
-    const download = (world) => {
-        const value = exportWorldRecord(world.id); if (!value) return;
-        const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([value], {type: "application/json"})); link.download = `${world.name}.json`; link.click(); URL.revokeObjectURL(link.href);
+    const run = async (operation) => {
+        setBusy(true); setError("");
+        try { await operation(); } catch (value) { setError(value.message); }
+        finally { setBusy(false); }
+    };
+    const download = async (world) => {
+        if (!(await saveWorld("manual"))) throw new Error("Save the current world before exporting");
+        const value = await worldApi.export(world.id);
+        const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], {type: "application/json"})); link.download = `${world.name}.json`; link.click(); URL.revokeObjectURL(link.href);
     };
     return <div className="advanced-backdrop" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}><section className="advanced-panel world-manager">
         <header><strong>Worlds</strong><button onClick={close}>×</button></header>
-        {worlds.map((world) => <div className="world-row" key={world.id}><div><b>{world.name}</b><small>Seed: {world.seed}</small></div><button disabled={world.id === activeId} onClick={() => { selectWorld(world.id); window.location.reload(); }}>Open</button><button onClick={() => { duplicateWorldRecord(world.id, `world-${Date.now()}`); setWorlds(readCatalog()); }}>Duplicate</button><button onClick={() => download(world)}>Export</button><button onClick={() => { if (window.confirm(`Delete ${world.name}?`)) { deleteWorldRecord(world.id); setWorlds(readCatalog()); if (world.id === activeId) window.location.reload(); } }}>Delete</button></div>)}
-        <h3>Create world</h3><div className="marker-form"><input value={name} onChange={(event) => setName(event.target.value)}/><input value={seed} placeholder="Seed" onChange={(event) => setSeed(event.target.value)}/><button onClick={() => { createWorld(name, seed); setWorlds(readCatalog()); close(); }}>Create</button></div>
+        {error && <p className="pack-error">{error}</p>}
+        {worlds.map((world) => <div className="world-row" key={world.id}><div><b>{world.name}</b><small>Seed: {world.seed}</small></div><button disabled={busy || world.id === activeId} onClick={() => run(async () => { await openWorld(world.id); close(); })}>Open</button><button disabled={busy} onClick={() => run(async () => { if (!(await saveWorld("manual"))) throw new Error("Save failed"); await worldApi.duplicate(world.id, `world-${Date.now()}`); await refreshWorlds(); })}>Duplicate</button><button disabled={busy} onClick={() => run(() => download(world))}>Export</button><button disabled={busy} onClick={() => { if (window.confirm(`Delete ${world.name}?`)) run(async () => { await worldApi.delete(world.id); const remaining = await refreshWorlds(); if (world.id === activeId) { if (remaining[0]) await openWorld(remaining[0].id, false); else await createWorld("My World", "minecraft-react"); } }); }}>Delete</button></div>)}
+        <h3>Create world</h3><div className="marker-form"><input value={name} onChange={(event) => setName(event.target.value)}/><input value={seed} placeholder="Seed" onChange={(event) => setSeed(event.target.value)}/><button disabled={busy} onClick={() => run(async () => { await createWorld(name, seed); close(); })}>Create</button></div>
         <h3>Current world rules</h3><div className="world-rules">{Object.entries(gameRules).map(([rule, enabled]) => <label key={rule}><input type="checkbox" checked={enabled} onChange={(event) => setGameRule(rule, event.target.checked)}/>{rule}</label>)}</div>
-        <h3>Import world</h3><textarea value={importText} onChange={(event) => setImportText(event.target.value)} placeholder="Paste exported world JSON"/><button onClick={() => { const result = importWorldRecord(importText, `world-${Date.now()}`); if (result.ok) { setWorlds(readCatalog()); setImportText(""); } else window.alert(result.error); }}>Import</button>
+        <h3>Import world</h3><textarea value={importText} onChange={(event) => setImportText(event.target.value)} placeholder="Paste exported world JSON"/><button disabled={busy} onClick={() => run(async () => { const value = JSON.parse(importText); await worldApi.import({...value, newId: `world-${Date.now()}`}); await refreshWorlds(); setImportText(""); })}>Import</button>
     </section></div>;
 };
 
@@ -122,5 +134,5 @@ export const DataPackManager = () => {
     const [text, setText] = useState("");
     const [errors, setErrors] = useState([]);
     if (!open) return null;
-    return <div className="advanced-backdrop" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}><section className="advanced-panel"><header><strong>Data packs</strong><button onClick={toggle}>×</button></header><p>Enabled: {enabled.join(", ") || "None"}</p><textarea value={text} onChange={(event) => setText(event.target.value)} placeholder={'{"version":1,"namespace":"example","blocks":[{"id":"blue_brick","name":"Blue Brick","color":"#3977bb"}]}'}/>{errors.map((error) => <p className="pack-error" key={error}>{error}</p>)}<button onClick={() => { const result = importPack(text); setErrors(result.errors); if (result.ok) setText(""); }}>Validate and enable</button></section></div>;
+    return <div className="advanced-backdrop" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}><section className="advanced-panel"><header><strong>Data packs</strong><button onClick={toggle}>×</button></header><p>Enabled: {enabled.join(", ") || "None"}</p><textarea value={text} onChange={(event) => setText(event.target.value)} placeholder={'{"version":1,"namespace":"example","blocks":[{"id":"blue_brick","name":"Blue Brick","color":"#3977bb"}]}'}/>{errors.map((error) => <p className="pack-error" key={error}>{error}</p>)}<button onClick={async () => { const result = await importPack(text); setErrors(result.errors); if (result.ok) setText(""); }}>Validate and enable</button></section></div>;
 };

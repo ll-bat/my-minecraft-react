@@ -3,9 +3,8 @@ import {useStore} from "../hooks/useStore";
 
 export const AUTO_SAVE_INTERVAL_MS = 2500;
 
-// These are the values written by serializeWorld, plus the world metadata used
-// to choose the localStorage document. Reference checks are enough because the
-// store replaces persistent arrays, maps, and sets when they change.
+// These values contribute to a database save. Reference checks are enough
+// because the store replaces persistent arrays, maps, and sets when they change.
 export const PERSISTENT_WORLD_KEYS = [
     "seed",
     "worldUid",
@@ -47,31 +46,36 @@ export function persistentWorldChanged(state, previousState) {
 
 export function AutoSave() {
     useEffect(() => {
-        let dirty = false;
+        let dirtyVersion = 0;
+        let savedVersion = 0;
         let saving = false;
         let idleSave = null;
 
         const unsubscribe = useStore.subscribe((state, previousState) => {
-            if (persistentWorldChanged(state, previousState)) dirty = true;
+            if (persistentWorldChanged(state, previousState)) dirtyVersion += 1;
         });
 
-        const saveNow = () => {
-            if (!dirty || saving) return;
+        const saveNow = async () => {
+            if (dirtyVersion === savedVersion || saving) return;
             saving = true;
-            const saved = useStore.getState().saveWorld("auto");
-            if (saved) dirty = false;
-            saving = false;
+            const capturedVersion = dirtyVersion;
+            try {
+                const saved = await useStore.getState().saveWorld("auto");
+                if (saved) savedVersion = capturedVersion;
+            } finally {
+                saving = false;
+            }
         };
 
         const scheduleSave = () => {
-            if (!dirty || saving || idleSave !== null) return;
+            if (dirtyVersion === savedVersion || saving || idleSave !== null) return;
             if (typeof window.requestIdleCallback === "function") {
                 idleSave = window.requestIdleCallback(() => {
                     idleSave = null;
-                    saveNow();
+                    void saveNow();
                 }, {timeout: 400});
             } else {
-                saveNow();
+                void saveNow();
             }
         };
 
@@ -80,7 +84,8 @@ export function AutoSave() {
                 window.cancelIdleCallback(idleSave);
                 idleSave = null;
             }
-            saveNow();
+            void useStore.getState().savePlayerPosition(true);
+            void saveNow();
         };
 
         const interval = window.setInterval(scheduleSave, AUTO_SAVE_INTERVAL_MS);

@@ -64,6 +64,16 @@ import {registerDataPack, registerSavedPacks, saveDataPack} from "../world/dataP
 import {generateTerrainColumnAsync} from "../world/terrainStreaming";
 import {addStructure, cityCenter, stadiumLocations, structureForColumn} from "../world/structures";
 import {bridgeEndpointError, planBridge} from "../world/bridges";
+import {worldApi} from "../api/worldApi";
+import {
+    allPersistentChunkKeys,
+    applyRemoteChunks,
+    buildAutosavePayload,
+    documentFromBootstrap,
+    markDirtyPositions,
+    persistenceChunkKey,
+    remoteDocument
+} from "../world/remoteWorld";
 
 export {WORLD_STORAGE_KEY};
 
@@ -80,6 +90,7 @@ const TERRAIN_LIGHT_DEFINITIONS = Object.fromEntries(Object.values(BLOCK_BY_ID).
 const installedPacks = registerSavedPacks();
 let terrainGenerationRequest = 0;
 let previousTerrainView = null;
+let pendingRemoteSave = null;
 
 function scheduleTerrainWork(callback) {
     if (typeof window !== "undefined" && typeof window.requestIdleCallback === "function") {
@@ -101,6 +112,28 @@ function bumpRevisions(revisions, keys) {
     const next = new Map(revisions);
     keys.forEach((key) => next.set(key, (next.get(key) ?? 0) + 1));
     return next;
+}
+
+function dirtyPositions(state, positions) {
+    return markDirtyPositions(state.dirtyChunks, state.dimension, positions);
+}
+
+function uniqueEntities(entities) {
+    const ids = new Set();
+    return entities.filter((entity) => {
+        if (!entity?.id || ids.has(entity.id)) return false;
+        ids.add(entity.id);
+        return true;
+    });
+}
+
+function appendUniqueEntities(state, current, candidates) {
+    const ids = new Set(current.map((entity) => entity.id));
+    return [...current, ...candidates.filter((entity) => {
+        if (state.deletedEntityIds?.has(entity.id) || ids.has(entity.id)) return false;
+        ids.add(entity.id);
+        return true;
+    })];
 }
 
 function itemCount(inventory, itemId) {
@@ -152,9 +185,13 @@ function generatedWorldMarkers(seed) {
     return markers;
 }
 
-function mergeGeneratedColumn(chunks, generated) {
+function mergeGeneratedColumn(chunks, generated, dimension, authoritativeChunks) {
     const next = new Map(chunks);
     generated.forEach((generatedChunk, key) => {
+        if (authoritativeChunks?.has(persistenceChunkKey(dimension, key))) {
+            if (!next.has(key)) next.set(key, new Map());
+            return;
+        }
         const existing = next.get(key);
         next.set(key, existing
             ? new Map([...generatedChunk, ...existing])
@@ -296,6 +333,17 @@ function initialState() {
         spawn: spawnPosition(seed),
         worldId: 1,
         saveStatus: "",
+        persistenceReady: false,
+        persistenceRevision: 0,
+        persistenceIncarnationId: null,
+        persistencePositionVersion: 0,
+        persistenceConflict: false,
+        persistenceSuspended: false,
+        dirtyChunks: new Map(),
+        entityTombstones: new Map(),
+        deletedEntityIds: new Set(),
+        remoteAuthoritativeChunks: new Set(),
+        remoteLoadedColumns: new Set(),
         renderMetrics: null,
     };
 }
@@ -303,7 +351,11 @@ function initialState() {
 export const useStore = create((set, get) => ({
     ...initialState(),
 
-    ensureColumns: (centerX, centerZ, requestedDistance = null) => {
+    ensureColumns: (centerX, centerZ, requestedDistance = null, remoteChecked = false) => {
+        if (get().persistenceReady && !remoteChecked) {
+            return get().loadRemoteRegion(centerX, centerZ, requestedDistance ?? get().renderDistance)
+                .then(() => get().ensureColumns(centerX, centerZ, requestedDistance, true));
+        }
         const distance = requestedDistance ?? get().renderDistance;
         const requestId = ++terrainGenerationRequest;
         const initial = get();
@@ -424,7 +476,7 @@ export const useStore = create((set, get) => ({
                             const communityGroup = communityGroupForStructure(existingStructure);
                             let entities = state.entities;
                             if (state.gameRules.creatures && !spawnedCreatureGroups.has(communityGroup)) {
-                                entities = [...entities, ...spawnCommunityForStructure(generationIdentity.seed, existingStructure, chunks)];
+                                entities = appendUniqueEntities(state, entities, spawnCommunityForStructure(generationIdentity.seed, existingStructure, chunks));
                                 spawnedCreatureGroups.add(communityGroup);
                             }
                             const structureIsNew = !state.discoveredStructures.some((entry) => entry.id === existingStructure.id);
@@ -449,7 +501,7 @@ export const useStore = create((set, get) => ({
                     const fishGroup = `${key}:fish`;
                     if (beforeGeneration.gameRules.creatures && generationIdentity.dimension === "overworld" && !beforeGeneration.spawnedCreatureGroups.has(fishGroup)) {
                         set((state) => ({
-                            entities: [...state.entities, ...spawnFishForColumn(generationIdentity.seed, chunkX, chunkZ, state.chunks, state.playerPosition)],
+                            entities: appendUniqueEntities(state, state.entities, spawnFishForColumn(generationIdentity.seed, chunkX, chunkZ, state.chunks, state.playerPosition)),
                             spawnedCreatureGroups: new Set(state.spawnedCreatureGroups).add(fishGroup),
                         }));
                     }
@@ -477,7 +529,7 @@ export const useStore = create((set, get) => ({
                         return;
                     }
                     set((state) => {
-                        const chunks = mergeGeneratedColumn(state.chunks, generated);
+                        const chunks = mergeGeneratedColumn(state.chunks, generated, generationIdentity.dimension, state.remoteAuthoritativeChunks);
                         const generatedColumns = new Set(state.generatedColumns).add(key);
                         const revisedKeys = Array.from(generated.keys()).flatMap(neighboringChunkKeys);
                         const chunkRevisions = bumpRevisions(state.chunkRevisions, revisedKeys);
@@ -492,23 +544,23 @@ export const useStore = create((set, get) => ({
                         }
                         let entities = state.entities;
                         if (state.gameRules.creatures && !spawnedCreatureGroups.has(creatureGroup)) {
-                            entities = [...entities, ...spawnCreaturesForColumn(
+                            entities = appendUniqueEntities(state, entities, spawnCreaturesForColumn(
                                 generationIdentity.seed,
                                 chunkX,
                                 chunkZ,
                                 state.playerPosition,
                                 false
-                            )];
+                            ));
                             spawnedCreatureGroups.add(creatureGroup);
                         }
                         const fishGroup = `${key}:fish`;
                         if (state.gameRules.creatures && generationIdentity.dimension === "overworld" && !spawnedCreatureGroups.has(fishGroup)) {
-                            entities = [...entities, ...spawnFishForColumn(generationIdentity.seed, chunkX, chunkZ, chunks, state.playerPosition)];
+                            entities = appendUniqueEntities(state, entities, spawnFishForColumn(generationIdentity.seed, chunkX, chunkZ, chunks, state.playerPosition));
                             spawnedCreatureGroups.add(fishGroup);
                         }
                         const communityGroup = communityGroupForStructure(structure);
                         if (state.gameRules.creatures && communityGroup && !spawnedCreatureGroups.has(communityGroup)) {
-                            entities = [...entities, ...spawnCommunityForStructure(generationIdentity.seed, structure, chunks)];
+                            entities = appendUniqueEntities(state, entities, spawnCommunityForStructure(generationIdentity.seed, structure, chunks));
                             spawnedCreatureGroups.add(communityGroup);
                         }
                         const structureBuiltGroup = builtGroupForStructure(structure);
@@ -603,6 +655,7 @@ export const useStore = create((set, get) => ({
                 fluidLevels,
                 fluidQueue: state.fluidQueue,
                 chunkRevisions: bumpRevisions(state.chunkRevisions, changedPositions.flatMap(affectedChunkKeys)),
+                dirtyChunks: dirtyPositions(state, changedPositions),
                 activeChunkKeys: activeKeysAfterEdits(
                     state.activeChunkKeys,
                     chunks,
@@ -651,6 +704,7 @@ export const useStore = create((set, get) => ({
             lightSourceRevision: state.lightSourceRevision
                 + (plan.placements.some(({blockId}) => emittedLight(blockId)) ? 1 : 0),
             chunkRevisions: bumpRevisions(state.chunkRevisions, revisedKeys),
+            dirtyChunks: dirtyPositions(state, plan.placements.map(({position: planned}) => planned)),
             activeChunkKeys: activeKeysAfterEdits(
                 state.activeChunkKeys,
                 chunks,
@@ -739,6 +793,7 @@ export const useStore = create((set, get) => ({
                 fluidLevels,
                 fluidQueue: state.fluidQueue,
                 chunkRevisions: bumpRevisions(state.chunkRevisions, removedPositions.flatMap(affectedChunkKeys)),
+                dirtyChunks: dirtyPositions(state, removedPositions),
                 activeChunkKeys: activeKeysAfterEdits(
                     state.activeChunkKeys,
                     chunks,
@@ -785,8 +840,21 @@ export const useStore = create((set, get) => ({
         const inventory = state.gameMode === "survival"
             ? damageTool(state.inventory, state.selectedHotbar)
             : state.inventory;
+        const entityTombstones = new Map(state.entityTombstones ?? []);
+        entityTombstones.set(`${state.dimension}|${id}`, {
+            entityId: id,
+            dimension: state.dimension,
+            chunkX: entity.chunk?.[0] ?? Math.floor(entity.position[0] / 16),
+            chunkZ: entity.chunk?.[1] ?? Math.floor(entity.position[2] / 16),
+            generated: !id.includes(":placed:"),
+            deleted: true,
+            state: null,
+        });
+        const deletedEntityIds = new Set(state.deletedEntityIds ?? []).add(id);
         set({
             entities: state.entities.filter((candidate) => candidate.id !== id),
+            entityTombstones,
+            deletedEntityIds,
             inventory,
             ...(state.gameMode === "survival" ? {survivalInventory: inventory} : {}),
             ...(state.mountedEntityId === id ? {mountedEntityId: null} : {}),
@@ -821,6 +889,7 @@ export const useStore = create((set, get) => ({
             fluidLevels: result.fluidLevels,
             fluidQueue: result.fluidQueue,
             chunkRevisions: bumpRevisions(state.chunkRevisions, revisedKeys),
+            dirtyChunks: dirtyPositions(state, result.changedPositions),
             activeChunkKeys: activeKeysAfterEdits(
                 state.activeChunkKeys,
                 result.chunks,
@@ -943,6 +1012,7 @@ export const useStore = create((set, get) => ({
                 blockStates,
                 blockLight: updateBlockLightInPlace(toggled.chunks, state.blockLight, toggled.positions),
                 chunkRevisions: bumpRevisions(state.chunkRevisions, toggled.positions.flatMap(affectedChunkKeys)),
+                dirtyChunks: dirtyPositions(state, toggled.positions),
                 soundEvent: {id: nanoid(), type: "toggle", blockId},
             });
             return true;
@@ -960,6 +1030,7 @@ export const useStore = create((set, get) => ({
                 blockLight: updateBlockLightInPlace(propagated.chunks, state.blockLight, [position, ...propagated.changed]),
                 lightSourceRevision: state.lightSourceRevision + (propagated.changed.length ? 1 : 0),
                 chunkRevisions: bumpRevisions(state.chunkRevisions, revised),
+                dirtyChunks: dirtyPositions(state, [position, ...propagated.changed]),
                 soundEvent: {id: nanoid(), type: "switch"},
                 particleEvent: {id: nanoid(), type: "power", position},
             });
@@ -975,6 +1046,7 @@ export const useStore = create((set, get) => ({
                 ...(state.gameMode === "survival" ? {survivalInventory: seeds.slots} : {}),
                 scheduledUpdates: [...state.scheduledUpdates, scheduleCrop(position)],
                 chunkRevisions: bumpRevisions(state.chunkRevisions, affectedChunkKeys(position)),
+                dirtyChunks: dirtyPositions(state, [position]),
                 soundEvent: {id: nanoid(), type: "harvest"},
                 particleEvent: {id: nanoid(), type: "harvest", position},
                 goals: {...state.goals, harvests: (state.goals.harvests ?? 0) + 1},
@@ -1032,13 +1104,13 @@ export const useStore = create((set, get) => ({
         if (item?.toolType === "hoe" && (targetId === "dirt" || targetId === "grass") && placement[1] > target[1]) {
             const chunks = setBlock(state.chunks, target, "farmland");
             const inventory = state.gameMode === "survival" ? damageTool(state.inventory, state.selectedHotbar) : state.inventory;
-            set({chunks, inventory, survivalInventory: state.gameMode === "survival" ? inventory : state.survivalInventory, chunkRevisions: bumpRevisions(state.chunkRevisions, affectedChunkKeys(target)), soundEvent: {id: nanoid(), type: "till"}, particleEvent: {id: nanoid(), type: "till", position: target}});
+            set({chunks, inventory, survivalInventory: state.gameMode === "survival" ? inventory : state.survivalInventory, chunkRevisions: bumpRevisions(state.chunkRevisions, affectedChunkKeys(target)), dirtyChunks: dirtyPositions(state, [target]), soundEvent: {id: nanoid(), type: "till"}, particleEvent: {id: nanoid(), type: "till", position: target}});
             return true;
         }
         if (item?.id === "seeds" && targetId === "farmland" && placement[1] > target[1] && !getBlock(state.chunks, placement)) {
             const chunks = setBlock(state.chunks, placement, "crop_0");
             const inventory = state.gameMode === "creative" ? state.inventory : consumeItem(state.inventory, state.selectedHotbar, 1);
-            set({chunks, inventory: inventory ?? state.inventory, survivalInventory: state.gameMode === "survival" ? (inventory ?? state.inventory) : state.survivalInventory, scheduledUpdates: [...state.scheduledUpdates, scheduleCrop(placement)], chunkRevisions: bumpRevisions(state.chunkRevisions, affectedChunkKeys(placement)), soundEvent: {id: nanoid(), type: "plant"}, particleEvent: {id: nanoid(), type: "plant", position: placement}});
+            set({chunks, inventory: inventory ?? state.inventory, survivalInventory: state.gameMode === "survival" ? (inventory ?? state.inventory) : state.survivalInventory, scheduledUpdates: [...state.scheduledUpdates, scheduleCrop(placement)], chunkRevisions: bumpRevisions(state.chunkRevisions, affectedChunkKeys(placement)), dirtyChunks: dirtyPositions(state, [placement]), soundEvent: {id: nanoid(), type: "plant"}, particleEvent: {id: nanoid(), type: "plant", position: placement}});
             return true;
         }
         return false;
@@ -1050,7 +1122,7 @@ export const useStore = create((set, get) => ({
         if (!current || current.type !== "chest" || current.revision !== expectedRevision || slots.length !== 27) return false;
         const blockEntities = new Map(get().blockEntities);
         blockEntities.set(key, {...current, slots, revision: current.revision + 1});
-        set({blockEntities});
+        set((state) => ({blockEntities, dirtyChunks: dirtyPositions(state, [position])}));
         return true;
     },
 
@@ -1086,7 +1158,7 @@ export const useStore = create((set, get) => ({
             }
         });
         if (!changed.length) return {scheduledUpdates: pending};
-        return {chunks, scheduledUpdates: pending, blockLight: updateBlockLightInPlace(chunks, state.blockLight, changed), chunkRevisions: bumpRevisions(state.chunkRevisions, changed.flatMap(affectedChunkKeys))};
+        return {chunks, scheduledUpdates: pending, blockLight: updateBlockLightInPlace(chunks, state.blockLight, changed), chunkRevisions: bumpRevisions(state.chunkRevisions, changed.flatMap(affectedChunkKeys)), dirtyChunks: dirtyPositions(state, changed)};
     }),
 
     setCraftingGrid: (kind, grid) => {
@@ -1121,16 +1193,21 @@ export const useStore = create((set, get) => ({
         if (fuel && !FUEL_TIME[fuel.itemId]) return {};
         const blockEntities = new Map(state.blockEntities);
         blockEntities.set(key, {...current, input, fuel, output: slots[2], lastUpdated: Date.now()});
-        return {blockEntities};
+        return {blockEntities, dirtyChunks: dirtyPositions(state, [position])};
     }),
 
     processFurnaces: (now = Date.now()) => set((state) => {
         if (state.blockEntities.size === 0) return {};
         const blockEntities = new Map(state.blockEntities);
+        const changedPositions = [];
         blockEntities.forEach((entity, key) => {
-            if (entity.type !== "chest") blockEntities.set(key, advanceFurnace(entity, now));
+            if (entity.type !== "chest") {
+                const next = advanceFurnace(entity, now);
+                blockEntities.set(key, next);
+                if (next !== entity) changedPositions.push(key.split(",").map(Number));
+            }
         });
-        return {blockEntities};
+        return {blockEntities, ...(changedPositions.length ? {dirtyChunks: dirtyPositions(state, changedPositions)} : {})};
     }),
 
     setWorldTime: (worldTime) => set((state) => {
@@ -1147,14 +1224,14 @@ export const useStore = create((set, get) => ({
             const [chunkX, chunkZ] = key.split(",").map(Number);
             const spawned = spawnCreaturesForColumn(state.seed, chunkX, chunkZ, state.playerPosition, true)
                 .filter((entity) => (state.blockLight.get(positionKey(entity.position.map(Math.round))) ?? 0) < 8);
-            entities = [...entities, ...spawned];
+            entities = appendUniqueEntities(state, entities, spawned);
             spawnedCreatureGroups.add(group);
         });
         return {worldTime, entities, spawnedCreatureGroups};
     }),
 
     updateCreatures: (now = Date.now(), deltaSeconds = 0.2) => set((state) => {
-        let entities = state.entities.map((entity) => updateCreature(entity, state, now, deltaSeconds));
+        let entities = uniqueEntities(state.entities).map((entity) => updateCreature(entity, state, now, deltaSeconds));
         if (entities.length > 192) {
             entities = entities.filter((entity) => entity.persistent || Math.hypot(
                 entity.position[0] - state.playerPosition[0],
@@ -1334,28 +1411,199 @@ export const useStore = create((set, get) => ({
         });
     },
 
-    saveWorld: (reason = "manual") => {
+    hydrateRemoteWorld: (payload, worlds = []) => {
+        const saved = documentFromBootstrap(payload);
+        if (!saved) throw new Error("The database world document is missing or invalid");
+        const seed = saved.seed;
+        const playerPosition = saved.playerPosition ?? spawnPosition(seed);
+        const generatedMarkers = generatedWorldMarkers(seed);
+        const markers = [...(payload.markers?.length ? payload.markers : saved.markers ?? [])]
+            .filter((marker) => marker.id !== "generated-nearest-stadium");
+        generatedMarkers.forEach((marker) => {
+            if (!markers.some((existing) => existing.id === marker.id)) markers.push(marker);
+        });
+        set((state) => ({
+            seed,
+            worldUid: payload.world.id,
+            worldName: payload.world.name,
+            worldCreatedAt: Date.parse(payload.world.createdAt) || Date.now(),
+            worlds,
+            texture: saved.texture ?? DEFAULT_BLOCK_ID,
+            chunks: new Map(),
+            generatedColumns: new Set(),
+            chunkRevisions: new Map(),
+            fluidLevels: new Map(),
+            fluidQueue: [],
+            inventory: catalogInventory(saved.inventory),
+            survivalInventory: catalogInventory(saved.survivalInventory ?? saved.inventory),
+            selectedHotbar: saved.selectedHotbar ?? 0,
+            gameMode: saved.gameMode ?? "survival",
+            renderDistance: saved.renderDistance ?? RENDER_DISTANCE,
+            inventoryOpen: false,
+            drops: saved.drops ?? [],
+            playerCrafting: saved.playerCrafting ?? Array(4).fill(null),
+            tableCrafting: saved.tableCrafting ?? Array(9).fill(null),
+            blockEntities: new Map(),
+            blockStates: new Map(),
+            scheduledUpdates: [],
+            blockLight: new Map(),
+            station: null,
+            stationPosition: null,
+            entities: [],
+            spawnedCreatureGroups: new Set(),
+            worldTime: saved.worldTime ?? 0,
+            dimension: saved.dimension ?? "overworld",
+            dimensionSnapshots: saved.dimensionSnapshots ?? new Map(),
+            exploredColumns: new Set((payload.exploredColumns ?? []).map((item) => `${item.dimension}:${item.chunkX},${item.chunkZ}`)),
+            discoveredBiomes: new Set((payload.discoveredBiomes ?? []).map((item) => `${item.dimension}:${item.biomeId}`)),
+            markers,
+            discoveredStructures: (payload.discoveredStructures ?? []).map((item) => item.data),
+            goals: saved.goals ?? {},
+            gameRules: saved.gameRules ?? {dayCycle: true, weather: true, creatures: true, cropGrowth: true},
+            enabledPacks: payload.dataPacks?.length ? payload.dataPacks.map((pack) => pack.namespace) : saved.enabledPacks ?? [],
+            entitiesLoaded: false,
+            mountedEntityId: payload.player?.state?.mountedEntityId ?? null,
+            playerPosition,
+            playerChunk: [chunkCoordinate(playerPosition[0]), chunkCoordinate(playerPosition[2])],
+            spawn: spawnPosition(seed),
+            worldId: state.worldId + 1,
+            activeChunkKeys: [],
+            collisionReadyChunkKeys: new Set(),
+            bridgeAnchor: null,
+            persistenceReady: true,
+            persistenceRevision: payload.world.revision,
+            persistenceIncarnationId: payload.world.incarnationId,
+            persistencePositionVersion: payload.player?.positionVersion ?? 0,
+            persistenceConflict: false,
+            persistenceSuspended: false,
+            dirtyChunks: new Map(),
+            entityTombstones: new Map(),
+            deletedEntityIds: new Set(),
+            remoteAuthoritativeChunks: new Set(),
+            remoteLoadedColumns: new Set(),
+            saveStatus: "World loaded",
+        }));
+    },
+
+    loadRemoteRegion: async (centerX, centerZ, distance) => {
+        const state = get();
+        if (!state.persistenceReady) return true;
+        const edge = Math.ceil(distance);
+        const requested = [];
+        for (let x = centerX - edge; x <= centerX + edge; x += 1) {
+            for (let z = centerZ - edge; z <= centerZ + edge; z += 1) requested.push(`${state.dimension}:${x},${z}`);
+        }
+        if (requested.every((key) => state.remoteLoadedColumns.has(key))) return true;
+        const identity = {worldUid: state.worldUid, dimension: state.dimension, worldId: state.worldId};
+        const requestedDirtyVersions = new Map(state.dirtyChunks);
+        const response = await worldApi.region(state.worldUid, {
+            dimension: state.dimension, minX: centerX - edge, maxX: centerX + edge,
+            minZ: centerZ - edge, maxZ: centerZ + edge,
+        });
+        const current = get();
+        if (current.worldUid !== identity.worldUid || current.dimension !== identity.dimension || current.worldId !== identity.worldId) return false;
+        const safeChunks = response.chunks.filter((record) => {
+            const key = persistenceChunkKey(identity.dimension, `${record.chunkX},${record.chunkY},${record.chunkZ}`);
+            return current.dirtyChunks.get(key) === requestedDirtyVersions.get(key);
+        });
+        const merged = applyRemoteChunks(current, identity.dimension, safeChunks, response.entities);
+        const remoteLoadedColumns = new Set(current.remoteLoadedColumns);
+        requested.forEach((key) => remoteLoadedColumns.add(key));
+        const revised = safeChunks.map((record) => `${record.chunkX},${record.chunkY},${record.chunkZ}`).flatMap(neighboringChunkKeys);
+        set({
+            ...merged,
+            remoteLoadedColumns,
+            chunkRevisions: bumpRevisions(current.chunkRevisions, revised),
+            blockLight: rebuildBlockLight(merged.chunks),
+        });
+        return true;
+    },
+
+    markAllChunksDirty: () => set((state) => {
+        const dirtyChunks = new Map(state.dirtyChunks);
+        allPersistentChunkKeys(state).forEach((key) => dirtyChunks.set(key, (dirtyChunks.get(key) ?? 0) + 1));
+        return {dirtyChunks};
+    }),
+
+    saveWorld: async (reason = "manual") => {
+        if (get().persistenceSuspended) return false;
+        if (!get().persistenceReady) {
+            try {
+                writeWorld(get());
+                set({saveStatus: reason === "auto" ? "Autosaved" : reason === "fresh" ? "Fresh world saved" : "World saved", worlds: worldCatalog()});
+                return true;
+            } catch {
+                set({saveStatus: "World is too large for browser storage"});
+                return false;
+            }
+        }
+        if (get().persistenceConflict) return false;
+        if (pendingRemoteSave) {
+            await pendingRemoteSave;
+            if (reason === "manual" && get().dirtyChunks.size) return get().saveWorld(reason);
+            return !get().persistenceConflict;
+        }
+        const positionVersion = get().persistencePositionVersion + 1;
+        set({persistencePositionVersion: positionVersion, saveStatus: reason === "auto" ? "Saving…" : "Saving world…"});
+        const snapshot = get();
+        const dirtyVersions = new Map(snapshot.dirtyChunks);
+        const tombstoneVersions = new Map(snapshot.entityTombstones);
+        const batchId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : nanoid();
+        const payload = buildAutosavePayload(snapshot, batchId, positionVersion);
+        const request = worldApi.autosave(snapshot.worldUid, payload);
+        pendingRemoteSave = request;
         try {
-            writeWorld(get());
-            set({
-                saveStatus: reason === "auto" ? "Autosaved" : reason === "fresh" ? "Fresh world saved" : "World saved",
-                worlds: worldCatalog(),
+            const result = await request;
+            if (get().worldUid !== snapshot.worldUid || get().persistenceIncarnationId !== snapshot.persistenceIncarnationId) return false;
+            set((state) => {
+                const dirtyChunks = new Map(state.dirtyChunks);
+                dirtyVersions.forEach((version, key) => {
+                    if (dirtyChunks.get(key) === version) dirtyChunks.delete(key);
+                });
+                const entityTombstones = new Map(state.entityTombstones);
+                tombstoneVersions.forEach((value, key) => {
+                    if (entityTombstones.get(key) === value) entityTombstones.delete(key);
+                });
+                return {
+                    dirtyChunks,
+                    entityTombstones,
+                    persistenceRevision: result.revision,
+                    saveStatus: reason === "auto" ? "Autosaved" : reason === "fresh" ? "Fresh world saved" : "World saved",
+                };
             });
             return true;
+        } catch (error) {
+            if (get().worldUid !== snapshot.worldUid || get().persistenceIncarnationId !== snapshot.persistenceIncarnationId) return false;
+            const conflict = error.code === "REVISION_CONFLICT" || error.code === "WORLD_RESET";
+            set({persistenceConflict: conflict, saveStatus: conflict ? "Save conflict · reload or export this world" : `Not saved · ${error.message}`});
+            return false;
+        } finally {
+            if (pendingRemoteSave === request) pendingRemoteSave = null;
+        }
+    },
+
+    savePlayerPosition: async (keepalive = false) => {
+        const state = get();
+        if (!state.persistenceReady) return false;
+        const positionVersion = state.persistencePositionVersion + 1;
+        set({persistencePositionVersion: positionVersion});
+        try {
+            await worldApi.savePlayer(state.worldUid, {incarnationId: state.persistenceIncarnationId, position: state.playerPosition, positionVersion}, keepalive);
+            return true;
         } catch {
-            set({saveStatus: "World is too large for browser storage"});
             return false;
         }
     },
 
-    createWorld: (requestedSeed, requestedName = null, requestedId = null) => {
+    createWorld: async (requestedSeed, requestedName = null, requestedId = null) => {
         const current = get();
+        const remote = current.persistenceReady;
         const worldUid = requestedId ?? current.worldUid;
         const worldName = String(requestedName ?? current.worldName).trim() || "My World";
         const seed = String(requestedSeed).trim() || DEFAULT_WORLD_SEED;
         const spawn = spawnPosition(seed);
         const generatedMarkers = generatedWorldMarkers(seed);
-        clearSavedWorld(worldUid);
+        if (!remote) clearSavedWorld(worldUid);
         set((state) => ({
             seed,
             worldUid,
@@ -1412,12 +1660,72 @@ export const useStore = create((set, get) => ({
             spawn,
             worldId: state.worldId + 1,
             saveStatus: "New world created",
+            persistenceReady: !remote && state.persistenceReady,
+            persistenceConflict: false,
+            persistenceSuspended: remote,
+            dirtyChunks: new Map(),
+            entityTombstones: new Map(),
+            deletedEntityIds: new Set(),
+            remoteAuthoritativeChunks: new Set(),
+            remoteLoadedColumns: new Set(),
         }));
-        get().saveWorld("fresh");
+        if (!remote) return get().saveWorld("fresh");
+        try {
+            const fresh = get();
+            const world = await worldApi.reset(current.worldUid, {
+                seed,
+                settings: {document: remoteDocument(fresh)},
+                player: {position: fresh.playerPosition, positionVersion: current.persistencePositionVersion + 1, state: {mountedEntityId: null}},
+            });
+            set({
+                persistenceReady: true,
+                persistenceRevision: world.revision,
+                persistenceIncarnationId: world.incarnationId,
+                persistencePositionVersion: current.persistencePositionVersion + 1,
+                persistenceSuspended: false,
+                saveStatus: "Fresh world saved",
+            });
+            await get().refreshWorlds();
+            return true;
+        } catch (error) {
+            set({saveStatus: `World reset failed · ${error.message}`, persistenceSuspended: false});
+            await get().openRemoteWorld(current.worldUid, false).catch(() => {});
+            return false;
+        }
     },
 
-    createManagedWorld: (name, seed) => {
-        get().createWorld(seed, name, `world-${Date.now()}-${Math.floor(Math.random() * 10000)}`);
+    refreshWorlds: async () => {
+        const result = await worldApi.list();
+        set({worlds: result.worlds});
+        return result.worlds;
+    },
+
+    openRemoteWorld: async (worldUid, flush = true) => {
+        if (flush && get().persistenceReady && !(await get().saveWorld("manual"))) return false;
+        const worlds = await get().refreshWorlds();
+        const payload = await worldApi.load(worldUid);
+        get().hydrateRemoteWorld(payload, worlds);
+        const state = get();
+        await state.loadRemoteRegion(state.playerChunk[0], state.playerChunk[1], state.renderDistance);
+        return true;
+    },
+
+    createManagedWorld: async (name, requestedSeed) => {
+        if (get().persistenceReady && !(await get().saveWorld("manual"))) throw new Error("The current world could not be saved");
+        const seed = String(requestedSeed).trim() || DEFAULT_WORLD_SEED;
+        const worldUid = `world-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+        const position = spawnPosition(seed);
+        const base = get();
+        const document = remoteDocument({
+            ...base, seed, worldUid, worldName: String(name).trim() || "New World", playerPosition: position,
+            chunks: new Map(), generatedColumns: new Set(), fluidLevels: new Map(), blockEntities: new Map(),
+            blockStates: new Map(), scheduledUpdates: [], entities: [], spawnedCreatureGroups: new Set(),
+            dimensionSnapshots: new Map(), exploredColumns: new Set(), discoveredBiomes: new Set(),
+            discoveredStructures: [], markers: generatedWorldMarkers(seed), goals: {}, worldTime: 0,
+            inventory: creativeInventory(), survivalInventory: creativeInventory(), enabledPacks: [],
+        });
+        await worldApi.create({id: worldUid, name: String(name).trim() || "New World", seed, settings: {document}, player: {position, positionVersion: 0, state: {mountedEntityId: null}}});
+        return get().openRemoteWorld(worldUid, false);
     },
 
     toggleDebug: () => set((state) => ({debugOpen: !state.debugOpen})),
@@ -1427,12 +1735,13 @@ export const useStore = create((set, get) => ({
     removeMarker: (id) => set((state) => ({markers: state.markers.filter((marker) => marker.id !== id)})),
     togglePacks: () => set((state) => ({packsOpen: !state.packsOpen})),
     setGameRule: (rule, value) => set((state) => ({gameRules: {...state.gameRules, [rule]: Boolean(value)}})),
-    importDataPack: (serialized) => {
+    importDataPack: async (serialized) => {
         let pack;
         try { pack = JSON.parse(serialized); } catch { return {ok: false, errors: ["The pack is not valid JSON"]}; }
         const result = registerDataPack(pack);
         if (!result.ok) return result;
-        saveDataPack(pack);
+        if (get().persistenceReady) await worldApi.savePack(pack);
+        else saveDataPack(pack);
         set((state) => ({enabledPacks: Array.from(new Set([...state.enabledPacks, pack.namespace])), inventory: catalogInventory(state.inventory), interactionFeedback: `Enabled data pack ${pack.namespace}`}));
         return result;
     },

@@ -1,0 +1,147 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum WorldStatus {
+  IMPORTING
+  READY
+}
+
+model World {
+  id                 String   @id @db.VarChar(128)
+  name               String   @db.VarChar(120)
+  seed               String   @db.VarChar(256)
+  status             WorldStatus @default(READY)
+  saveVersion        Int      @default(9)
+  generatorVersion   Int      @default(1)
+  revision           Int      @default(0)
+  incarnationId      String   @unique @db.VarChar(64)
+  lastBatchId        String?  @db.VarChar(64)
+  settings           Json
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  lastPlayedAt       DateTime @default(now())
+  player              PlayerState?
+  dimensions          DimensionState[]
+  chunks              ChunkState[]
+  entities            EntityState[]
+  exploredColumns     ExploredColumn[]
+  discoveredBiomes    DiscoveredBiome[]
+  discoveredStructures DiscoveredStructure[]
+  markers             WorldMarker[]
+  enabledPacks        WorldDataPack[]
+
+  @@index([status, lastPlayedAt])
+}
+
+model PlayerState {
+  worldId         String   @id @db.VarChar(128)
+  position        Json
+  positionVersion Int      @default(0)
+  state           Json
+  updatedAt       DateTime @updatedAt
+  world           World    @relation(fields: [worldId], references: [id], onDelete: Cascade)
+}
+
+model DimensionState {
+  id        BigInt   @id @default(autoincrement())
+  worldId   String   @db.VarChar(128)
+  dimension String   @db.VarChar(64)
+  state     Json
+  updatedAt DateTime @updatedAt
+  world     World    @relation(fields: [worldId], references: [id], onDelete: Cascade)
+  @@unique([worldId, dimension])
+}
+
+model ChunkState {
+  id        BigInt   @id @default(autoincrement())
+  worldId   String   @db.VarChar(128)
+  dimension String   @db.VarChar(64)
+  chunkX    Int
+  chunkY    Int
+  chunkZ    Int
+  revision  Int      @default(0)
+  data      Json
+  updatedAt DateTime @updatedAt
+  world     World    @relation(fields: [worldId], references: [id], onDelete: Cascade)
+  @@unique([worldId, dimension, chunkX, chunkY, chunkZ])
+  @@index([worldId, dimension, chunkX, chunkZ])
+}
+
+model EntityState {
+  id        BigInt   @id @default(autoincrement())
+  worldId   String   @db.VarChar(128)
+  entityId  String   @db.VarChar(256)
+  dimension String   @db.VarChar(64)
+  chunkX    Int
+  chunkZ    Int
+  generated Boolean  @default(false)
+  deleted   Boolean  @default(false)
+  state     Json?
+  updatedAt DateTime @updatedAt
+  world     World    @relation(fields: [worldId], references: [id], onDelete: Cascade)
+  @@unique([worldId, dimension, entityId])
+  @@index([worldId, dimension, chunkX, chunkZ])
+}
+
+model ExploredColumn {
+  id        BigInt @id @default(autoincrement())
+  worldId   String @db.VarChar(128)
+  dimension String @db.VarChar(64)
+  chunkX    Int
+  chunkZ    Int
+  world     World  @relation(fields: [worldId], references: [id], onDelete: Cascade)
+  @@unique([worldId, dimension, chunkX, chunkZ])
+}
+
+model DiscoveredBiome {
+  id        BigInt @id @default(autoincrement())
+  worldId   String @db.VarChar(128)
+  dimension String @db.VarChar(64)
+  biomeId   String @db.VarChar(128)
+  world     World  @relation(fields: [worldId], references: [id], onDelete: Cascade)
+  @@unique([worldId, dimension, biomeId])
+}
+
+model DiscoveredStructure {
+  id          BigInt @id @default(autoincrement())
+  worldId     String @db.VarChar(128)
+  structureId String @db.VarChar(256)
+  dimension   String @db.VarChar(64)
+  data        Json
+  world       World  @relation(fields: [worldId], references: [id], onDelete: Cascade)
+  @@unique([worldId, structureId])
+  @@index([worldId, dimension])
+}
+
+model WorldMarker {
+  id        String @db.VarChar(128)
+  worldId   String @db.VarChar(128)
+  dimension String @db.VarChar(64)
+  name      String @db.VarChar(120)
+  color     String @db.VarChar(16)
+  position  Json
+  world     World  @relation(fields: [worldId], references: [id], onDelete: Cascade)
+  @@id([worldId, id])
+  @@index([worldId, dimension])
+}
+
+model DataPack {
+  namespace String   @id @db.VarChar(64)
+  source    Json
+  updatedAt DateTime @updatedAt
+  worlds    WorldDataPack[]
+}
+
+model WorldDataPack {
+  worldId   String @db.VarChar(128)
+  namespace String @db.VarChar(64)
+  world     World    @relation(fields: [worldId], references: [id], onDelete: Cascade)
+  dataPack  DataPack @relation(fields: [namespace], references: [namespace], onDelete: Cascade)
+  @@id([worldId, namespace])
+}

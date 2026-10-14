@@ -6,7 +6,7 @@ import {isItemId} from "./items";
 import {createFurnace} from "./furnaces";
 import {validCreature} from "./entities";
 import {createChest} from "./interactions";
-import {ACTIVE_WORLD_KEY, ensureWorldCatalog, readCatalog, upsertWorld, worldDocumentKey} from "./worldCatalog";
+import {ACTIVE_WORLD_KEY, readCatalog, upsertWorld, worldDocumentKey} from "./worldCatalog";
 
 export const WORLD_STORAGE_KEY = "minecraft-react-world";
 export const LEGACY_STORAGE_KEY = "cubes";
@@ -59,7 +59,7 @@ function normalizeBlockEntity(value) {
     return normalizeFurnace(value);
 }
 
-function serializeChunks(chunks) {
+export function serializeChunks(chunks) {
     return Array.from(chunks ?? [], ([key, chunk]) => {
         const palette = [];
         const paletteIndexes = new Map();
@@ -94,7 +94,7 @@ function serializeChunks(chunks) {
     });
 }
 
-function normalizeChunks(value) {
+export function normalizeChunks(value) {
     const chunks = new Map();
     if (!Array.isArray(value)) return chunks;
     value.forEach((record) => {
@@ -119,7 +119,9 @@ function normalizeChunks(value) {
                 for (let index = start; index < start + length; index += 1) chunk.set(index, blockId);
             }
         }
-        if (chunk.size > 0) chunks.set(key, chunk);
+        // Empty snapshots are authoritative and prevent removed generated
+        // terrain from returning after the world is loaded again.
+        chunks.set(key, chunk);
     });
     return chunks;
 }
@@ -349,12 +351,17 @@ export function readWorld() {
     if (typeof window === "undefined") {
         return null;
     }
-    const {worlds, active} = ensureWorldCatalog(WORLD_STORAGE_KEY);
+    const worlds = readCatalog();
+    const requested = window.localStorage.getItem(ACTIVE_WORLD_KEY);
+    const active = worlds.some((world) => world.id === requested) ? requested : worlds[0]?.id;
+    const legacyDocument = window.localStorage.getItem(WORLD_STORAGE_KEY);
+    const legacyCubes = window.localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (!active && legacyDocument === null && legacyCubes === null) return null;
     const parsed = parseWorldDocument(
-        window.localStorage.getItem(worldDocumentKey(active)) ?? window.localStorage.getItem(WORLD_STORAGE_KEY),
-        window.localStorage.getItem(LEGACY_STORAGE_KEY)
+        active ? window.localStorage.getItem(worldDocumentKey(active)) ?? legacyDocument : legacyDocument,
+        legacyCubes
     );
-    return parsed ? {...parsed, worldMeta: worlds.find((world) => world.id === active)} : null;
+    return parsed ? {...parsed, worldMeta: worlds.find((world) => world.id === active) ?? {id: "world-default", name: "My World", seed: parsed.seed, createdAt: Date.now()}} : null;
 }
 
 export function writeWorld(state) {

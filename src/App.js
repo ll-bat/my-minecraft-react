@@ -18,10 +18,11 @@ import {AdvancedShortcuts, DataPackManager, DebugOverlay, MapPanel, WorldManager
 import {RenderingDiagnostics} from "./components/RenderingDiagnostics";
 import {AmbientSky} from "./components/AmbientSky";
 import {AutoSave} from "./components/AutoSave";
+import {PersistenceGate} from "./components/PersistenceGate";
 
 function App() {
     return (
-        <>
+        <PersistenceGate>
             <AutoSave/>
             <Canvas onContextMenu={(event) => event.preventDefault()}>
                 <RenderingDiagnostics/>
@@ -56,7 +57,7 @@ function App() {
             <MapPanel/>
             <WorldManager/>
             <DataPackManager/>
-        </>
+        </PersistenceGate>
     )
 }
 

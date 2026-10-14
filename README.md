@@ -1,6 +1,6 @@
 # Mini Minecraft
 
-A browser-based Minecraft-style sandbox built with React, Three.js, React Three Fiber, Zustand, and Cannon physics.
+A browser-based Minecraft-style sandbox built with React, Three.js, React Three Fiber, Zustand, Cannon physics, Express, Prisma, and PostgreSQL.
 
 Worlds are generated deterministically from text seeds and managed as independent saves. They include chunked terrain, biomes, caves, rare ores, localized lakes, weather, structures, exploration maps, peaceful goals, crafting, enchanting, portals to the Dream Grove, validated data packs, and persistent friendly creatures. The player has no health or death state, and creatures cannot attack or be attacked.
 
@@ -27,14 +27,33 @@ Sheep and rabbits wander peacefully during the day, while glow sprites appear at
 
 ```bash
 npm install
-npm start
+npm --prefix server install
+cp server/.env.example server/.env
+docker compose up -d postgres
+npm run db:deploy
+npm run dev
 ```
+
+The React client runs at `http://localhost:3000` and proxies `/api` to the Express server at `http://localhost:4000`. You can use an existing PostgreSQL server instead of Compose by changing `DATABASE_URL` in `server/.env`.
+
+PostgreSQL is authoritative for worlds, player position, changed chunks, persistent entities, discoveries, markers, and data packs. Autosave writes dirty chunks every 2.5 seconds. On the first database-backed launch, valid browser saves are imported and their old `localStorage` records are removed only after the server acknowledges them.
 
 Run the automated checks with:
 
 ```bash
 CI=true npm test -- --watch=false
 npm run build
+npm run server:build
 ```
 
-See the [feature roadmap](docs/features.md), [Phase 8 plan](docs/phase-8-plan.md), and [codebase analysis](docs/codebase-analysis.md) for implementation details and planned work.
+Backend integration tests delete their fixture worlds and therefore require a dedicated database whose name ends in `_test`:
+
+```bash
+docker compose exec postgres createdb -U minecraft minecraft_test
+DATABASE_URL=postgresql://minecraft:minecraft@127.0.0.1:5432/minecraft_test npm run db:deploy
+DATABASE_URL=postgresql://minecraft:minecraft@127.0.0.1:5432/minecraft_test npm --prefix server test
+```
+
+For production, build both applications, set `NODE_ENV=production` and `DATABASE_URL`, apply migrations with `npm run db:deploy`, then run `npm run server:start`. Express serves the compiled React application and API from one origin.
+
+See the [PostgreSQL persistence design](docs/postgresql-persistence-plan.md), [feature roadmap](docs/features.md), and [codebase analysis](docs/codebase-analysis.md) for implementation details.
